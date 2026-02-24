@@ -1,0 +1,4149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAE Feature Explorer — Baguettotron</title>
+<style>
+/* === Reset & Base === */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --bg: #F3EDE3;
+    --accent: #8B9D83;
+    --accent-hover: #7A8C73;
+    --accent-light: rgba(139, 157, 131, 0.15);
+    --panel: #FFFFFF;
+    --panel-shadow: 0 8px 32px rgba(0,0,0,0.08);
+    --panel-radius: 12px;
+    --border: #E0E0E0;
+    --text: #2A2A2A;
+    --text-secondary: #666666;
+    --text-muted: #999999;
+    --hover-bg: #F5F5F5;
+    --canvas-bg: #F3EDE3;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+    --mono: 'Consolas', 'Monaco', 'SF Mono', monospace;
+}
+
+[data-theme="dark"] {
+    --bg: #1a1a1a;
+    --accent: #8B9D83;
+    --accent-hover: #9DB094;
+    --accent-light: rgba(139, 157, 131, 0.2);
+    --panel: #242424;
+    --panel-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    --border: #3a3a3a;
+    --text: #e0e0e0;
+    --text-secondary: #aaaaaa;
+    --text-muted: #777777;
+    --hover-bg: #2e2e2e;
+    --canvas-bg: #1a1a1a;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font);
+    color: var(--text);
+    background: var(--bg);
+}
+
+/* No dot grid — clean background */
+
+/* === Layout === */
+.app {
+    display: flex;
+    height: 100vh;
+    gap: 0;
+}
+
+.main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+}
+
+.toolbar h1 {
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.toolbar .sep {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+}
+
+.search-wrap {
+    position: relative;
+    flex: 0 1 320px;
+}
+
+.search-wrap input {
+    width: 100%;
+    padding: 7px 12px 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    background: var(--panel);
+    color: var(--text);
+    transition: border-color 0.15s;
+}
+
+.search-wrap input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(139,157,131,0.1);
+}
+
+.search-status {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.toolbar-stats {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* Color mode dropdown styled inline */
+
+/* === Canvas === */
+.canvas-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+}
+
+.proximity-label {
+    position: absolute;
+    pointer-events: none;
+    font-family: var(--mono);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    padding: 2px 6px;
+    white-space: nowrap;
+    transform-origin: left center;
+}
+.proximity-label .pl-idx { font-weight: 600; color: var(--accent); }
+.proximity-label .pl-interp { font-style: italic; opacity: 0.85; }
+.proximity-label .pl-stats { color: rgba(255,255,255,0.5); }
+
+/* Tooltip */
+.tooltip {
+    position: fixed;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    pointer-events: none;
+    z-index: 100;
+    max-width: 250px;
+    display: none;
+}
+
+.tooltip .tt-idx {
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.tooltip .tt-interp {
+    color: var(--text);
+    font-weight: 400;
+    font-style: italic;
+    margin-top: 2px;
+}
+
+.tooltip .tt-stats {
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+/* === Sidebar === */
+.sidebar {
+    width: 420px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    box-shadow: var(--panel-shadow);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.2s ease;
+}
+
+.sidebar.collapsed {
+    width: 0;
+    border-left: none;
+}
+
+.sidebar-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sidebar-header .label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text);
+    opacity: 0.7;
+}
+
+.sidebar-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    line-height: 1;
+}
+
+.sidebar-close:hover {
+    background: var(--hover-bg);
+    color: var(--text-secondary);
+}
+
+.sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+}
+
+/* Scrollbar */
+.sidebar-body::-webkit-scrollbar { width: 8px; }
+.sidebar-body::-webkit-scrollbar-track { background: transparent; }
+.sidebar-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.sidebar-body::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Feature header */
+.feature-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.feature-title .idx {
+    color: var(--accent);
+}
+
+/* Interp edit box */
+.interp-box {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+}
+
+.interp-input {
+    flex: 1;
+    padding: 8px 12px;
+    font-family: var(--font);
+    font-size: 14.5px;
+    font-weight: 600;
+    font-style: italic;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--hover-bg);
+    color: var(--text);
+    outline: none;
+}
+
+.interp-input:focus {
+    border-color: var(--accent);
+}
+
+.interp-save {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-family: var(--font);
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.interp-save:hover { background: var(--accent-hover); }
+.interp-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Stats grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 12px 0 16px;
+}
+
+.stat-card {
+    background: var(--hover-bg);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.stat-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.stat-value {
+    font-size: 15px;
+    font-weight: 600;
+    font-family: var(--mono);
+}
+
+/* Examples */
+.examples-header {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text);
+    opacity: 0.7;
+    margin: 16px 0 8px;
+}
+
+.example {
+    background: var(--hover-bg);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    word-break: break-word;
+    border-left: 3px solid transparent;
+}
+
+.example .peak {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    font-family: var(--font);
+}
+
+/* Token highlighting */
+.tok {
+    padding: 1px 0;
+    border-radius: 2px;
+    white-space: pre-wrap;
+}
+
+.tok.hot {
+    background: rgba(139, 157, 131, var(--intensity));
+    border-bottom: 2px solid rgba(139, 157, 131, calc(var(--intensity) * 1.5));
+}
+
+/* Empty state */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 40px;
+}
+
+.empty-state .icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+    opacity: 0.3;
+}
+
+.empty-state p {
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+/* Loading */
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+}
+
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-bottom: 8px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Search results list */
+.search-results {
+    margin-top: 8px;
+}
+
+.search-result-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.1s;
+}
+
+.search-result-item:hover {
+    background: var(--hover-bg);
+}
+
+.search-result-item .feat-idx {
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.search-result-item .feat-score {
+    font-family: var(--mono);
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-left: auto;
+}
+
+.search-result-item .feat-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.search-result-item .feat-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+}
+
+/* === Inference Panel === */
+.infer-panel {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    background: var(--panel);
+}
+
+.infer-panel.hidden { display: none; }
+
+.infer-toggle {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+}
+
+.infer-toggle.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+.infer-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.infer-row textarea {
+    flex: 1;
+    resize: vertical;
+    min-height: 40px;
+    max-height: 120px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 1.4;
+    background: var(--panel);
+    color: var(--text);
+}
+
+.infer-row textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(139,157,131,0.1);
+}
+
+.infer-row button {
+    padding: 8px 16px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+.infer-row button:hover { background: var(--accent-hover); }
+.infer-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.infer-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.8;
+}
+
+.infer-tok {
+    padding: 1px 0;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: pre-wrap;
+    transition: background 0.1s;
+    position: relative;
+}
+
+.infer-tok:hover, .infer-tok.active {
+    background: rgba(139, 157, 131, 0.2);
+    border-bottom-color: var(--accent);
+}
+
+/* Inference feature popup */
+.infer-popup {
+    position: fixed;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    z-index: 200;
+    width: 280px;
+    max-height: 340px;
+    overflow-y: auto;
+    display: none;
+}
+
+.infer-popup .popup-header {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text);
+}
+
+.infer-popup .popup-feat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.1s;
+}
+
+.infer-popup .popup-feat:hover {
+    background: var(--hover-bg);
+}
+
+.infer-popup .popup-feat .pf-idx {
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--accent);
+    min-width: 50px;
+}
+
+.infer-popup .popup-feat .pf-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.infer-popup .popup-feat .pf-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+}
+
+.infer-popup .popup-feat .pf-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 40px;
+    text-align: right;
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+/* Static mode overrides */
+#infer-toggle { display: none !important; }
+#umap-toggle {
+    opacity: 0.35 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+#umap-toggle::after {
+    content: " (static)";
+    font-size: 9px;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+    <div class="main-area">
+        <div class="toolbar">
+            <h1>SAE Feature Explorer</h1>
+            <div class="sep"></div>
+            <div class="search-wrap">
+                <input type="text" id="search" placeholder="Search tokens (e.g. DNA, code, math)..." spellcheck="false">
+            </div>
+            <span class="search-status" id="search-status"></span>
+            <select id="color-mode" style="font-size:11px;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:3px 6px">
+                <option value="act+density" selected>Act + Density</option>
+                <option value="mean">Mean Activation</option>
+                <option value="max">Max Activation</option>
+                <option value="density">Density</option>
+                <option value="position">Position</option>
+            </select>
+            <button class="infer-toggle" id="infer-toggle" title="Live inference (requires --gpu)">Inference</button>
+            <button class="infer-toggle" id="view-toggle" title="Toggle 2D/3D UMAP">3D</button>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary)" title="Spread points apart (power-law scaling)">
+                Spread <input type="range" id="spread-slider" min="0.5" max="4" step="0.1" value="1" style="width:60px;height:14px">
+                <span id="spread-val" style="font-family:var(--mono);min-width:24px">1.0</span>
+            </label>
+            <label id="glow-label" style="display:none;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary)" title="Glow intensity for star halos">
+                Glow <input type="range" id="glow-slider" min="0" max="1000" value="1000" style="width:60px;height:14px">
+                <span id="glow-val" style="font-family:var(--mono);min-width:28px">10.0</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-secondary);cursor:pointer" title="Hide dead/inactive features from the map">
+                <input type="checkbox" id="hide-dead" checked style="margin:0"> Hide dead
+            </label>
+            <button class="infer-toggle" id="umap-toggle" title="UMAP parameter controls">UMAP</button>
+            <button class="infer-toggle" id="theme-toggle" title="Toggle dark mode">Dark</button>
+            <span class="toolbar-stats" id="toolbar-stats">Loading...</span>
+        </div>
+        <div class="infer-panel hidden" id="umap-panel" style="gap:16px;align-items:center;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary)">
+                Neighbors <input type="range" id="umap-neighbors" min="2" max="100" value="20" style="width:80px">
+                <span id="umap-neighbors-val" style="font-family:var(--mono);min-width:20px;font-size:11px">20</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary)">
+                Min Dist <input type="range" id="umap-mindist" min="0" max="100" value="10" style="width:80px">
+                <span id="umap-mindist-val" style="font-family:var(--mono);min-width:28px;font-size:11px">0.10</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary)">
+                Spread <input type="range" id="umap-spread" min="10" max="300" value="100" style="width:80px">
+                <span id="umap-spread-val" style="font-family:var(--mono);min-width:28px;font-size:11px">1.00</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary)">
+                Epochs <input type="range" id="umap-epochs" min="0" max="2000" step="50" value="0" style="width:80px">
+                <span id="umap-epochs-val" style="font-family:var(--mono);min-width:28px;font-size:11px">auto</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary)">
+                Metric
+                <select id="umap-metric" style="font-size:11px;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:2px 4px">
+                    <option value="cosine" selected>cosine</option>
+                    <option value="euclidean">euclidean</option>
+                    <option value="manhattan">manhattan</option>
+                    <option value="correlation">correlation</option>
+                </select>
+            </label>
+            <button class="infer-toggle" id="umap-run-2d" style="background:var(--accent);color:white;border-color:var(--accent)">Recompute 2D</button>
+            <button class="infer-toggle" id="umap-run-3d" style="background:var(--accent);color:white;border-color:var(--accent)">Recompute 3D</button>
+            <span id="umap-status" style="font-size:11px;color:var(--text-muted)"></span>
+        </div>
+        <div class="infer-panel hidden" id="infer-panel" style="flex-direction:column">
+            <div class="infer-row">
+                <textarea id="infer-text" placeholder="Type text to analyze... (Ctrl+Enter to run)" rows="2"></textarea>
+                <button id="infer-run">Run</button>
+                <button id="infer-combined" title="Show features activated by the full text combined">Combined</button>
+            </div>
+            <div class="infer-tokens" id="infer-tokens"></div>
+        </div>
+        <div class="canvas-container" id="canvas-container">
+            <canvas id="umap"></canvas>
+            <div id="three-container" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%"></div>
+            <canvas id="proximity-lines" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></canvas>
+            <div id="proximity-labels" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden"></div>
+        </div>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span class="label">Feature Detail</span>
+            <button class="sidebar-close" id="sidebar-close">&times;</button>
+        </div>
+        <div class="sidebar-body" id="sidebar-body">
+            <div class="empty-state">
+                <div class="icon">&#x25CF;</div>
+                <p>Click a point on the UMAP to inspect a feature.<br>
+                Use the search bar to find tokens and highlight correlated features.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+<div class="infer-popup" id="infer-popup"></div>
+
+<script>
+
+// === STATIC MODE: Fetch Shim ===
+const _STATIC_MODE = true;
+let _neighborsAll = null;
+let _topTokensAll = null;
+let _searchIndex = null;
+
+const _origFetch = window.fetch;
+window.fetch = function(url, opts) {
+    if (typeof url !== 'string') return _origFetch(url, opts);
+
+    // /static/feature_data.json -> data/feature_data.json
+    if (url === '/static/feature_data.json') {
+        return _origFetch('data/feature_data.json');
+    }
+
+    // /api/labels -> data/labels.json
+    if (url === '/api/labels') {
+        return _origFetch('data/labels.json');
+    }
+
+    // /api/feature/<id> -> features/<id>.json
+    const featureMatch = url.match(/^\/api\/feature\/(\d+)/);
+    if (featureMatch) {
+        return _origFetch('features/' + featureMatch[1] + '.json');
+    }
+
+    // /api/neighbors/<id> -> lookup from preloaded data
+    const neighborMatch = url.match(/^\/api\/neighbors\/(\d+)/);
+    if (neighborMatch && _neighborsAll) {
+        const idx = neighborMatch[1];
+        const data = _neighborsAll[idx] || [];
+        return Promise.resolve(new Response(JSON.stringify({
+            feature_idx: parseInt(idx),
+            neighbors: data,
+        }), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+
+    // /api/top_tokens/<id> -> lookup from preloaded data
+    const topTokenMatch = url.match(/^\/api\/top_tokens\/(\d+)/);
+    if (topTokenMatch && _topTokensAll) {
+        const idx = topTokenMatch[1];
+        const data = _topTokensAll[idx] || [];
+        return Promise.resolve(new Response(JSON.stringify({
+            feature_idx: parseInt(idx),
+            tokens: data,
+        }), {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+
+    // /api/search?q=... -> client-side search
+    const searchMatch = url.match(/^\/api\/search\?q=(.+)/);
+    if (searchMatch && _searchIndex) {
+        const q = decodeURIComponent(searchMatch[1]).toLowerCase().trim();
+        return Promise.resolve(new Response(JSON.stringify(_clientSearch(q)),
+            {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+
+    // /api/gpu_status -> always false
+    if (url === '/api/gpu_status') {
+        return Promise.resolve(new Response(JSON.stringify({gpu_ready: false}),
+            {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+
+    // /api/infer -> not available
+    if (url.startsWith('/api/infer')) {
+        return Promise.resolve(new Response(JSON.stringify({error: "Not available in static mode"}),
+            {status: 503, headers: {'Content-Type': 'application/json'}}));
+    }
+
+    // /api/umap -> not available
+    if (url.startsWith('/api/umap')) {
+        return Promise.resolve(new Response(JSON.stringify({error: "Not available in static mode"}),
+            {status: 503, headers: {'Content-Type': 'application/json'}}));
+    }
+
+    // /api/label/<id> POST -> save to localStorage
+    const labelMatch = url.match(/^\/api\/label\/(\d+)/);
+    if (labelMatch && opts && opts.method === 'POST') {
+        const fid = labelMatch[1];
+        try {
+            const body = JSON.parse(opts.body);
+            const saved = JSON.parse(localStorage.getItem('sae_labels') || '{}');
+            saved[fid] = body.interp || '';
+            localStorage.setItem('sae_labels', JSON.stringify(saved));
+        } catch(e) {}
+        return Promise.resolve(new Response(JSON.stringify({ok: true}),
+            {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+
+    // /api/similar_tokens -> not available in static
+    if (url.startsWith('/api/similar_tokens')) {
+        return Promise.resolve(new Response(JSON.stringify({tokens: []}),
+            {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+
+    // /api/vr_diag -> noop
+    if (url.startsWith('/api/vr_diag')) {
+        return Promise.resolve(new Response(JSON.stringify({ok: true}),
+            {status: 200, headers: {'Content-Type': 'application/json'}}));
+    }
+
+    // Fallthrough: original fetch
+    return _origFetch(url, opts);
+};
+
+function _clientSearch(q) {
+    if (!_searchIndex || q.length < 2) return {query: q, n_matching_tokens: 0, features: []};
+
+    // Find all token texts that contain the query
+    const featureScores = {};
+    let nMatching = 0;
+    for (const [text, feats] of Object.entries(_searchIndex)) {
+        if (text.includes(q)) {
+            nMatching++;
+            for (const {i, s} of feats) {
+                featureScores[i] = (featureScores[i] || 0) + s;
+            }
+        }
+    }
+
+    // Sort and take top 50
+    const sorted = Object.entries(featureScores)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 50)
+        .map(([i, s]) => ({i: parseInt(i), s: Math.round(s * 10000) / 10000}));
+
+    return {query: q, n_matching_tokens: nMatching, features: sorted};
+}
+// === END STATIC MODE ===
+
+
+// === State ===
+let features = [];
+let meta = {};
+let colorMode = "act+density";
+let hideDead = true;
+let selectedIdx = null;
+let highlightSet = null;
+let searchResults = null;
+
+// View transform
+let viewX = 0, viewY = 0, viewScale = 1;
+let dataXMin, dataXMax, dataYMin, dataYMax;
+
+const canvas = document.getElementById("umap");
+const ctx = canvas.getContext("2d");
+const tooltip = document.getElementById("tooltip");
+const sidebar = document.getElementById("sidebar");
+const sidebarBody = document.getElementById("sidebar-body");
+const searchInput = document.getElementById("search");
+const searchStatus = document.getElementById("search-status");
+const toolbarStats = document.getElementById("toolbar-stats");
+
+// === Feature labels (human interp) ===
+let featureLabels = {}; // {feature_id: {interp, autointerp}}
+
+// === Data loading ===
+async function init() {
+    toolbarStats.textContent = "Fetching data...";
+    const [resp, labelsResp, neighborsResp, topTokensResp, searchResp] = await Promise.all([
+        fetch("/static/feature_data.json"),
+        fetch("/api/labels"),
+        fetch("data/neighbors_all.json"),
+        fetch("data/top_tokens_all.json"),
+        fetch("data/search_index.json"),
+    ]);
+    if (!resp.ok) throw new Error(`feature_data.json: ${resp.status} ${resp.statusText}`);
+    if (!labelsResp.ok) throw new Error(`labels: ${labelsResp.status} ${labelsResp.statusText}`);
+    toolbarStats.textContent = "Parsing...";
+    const data = await resp.json();
+    featureLabels = await labelsResp.json();
+    // Load bulk data for static mode
+    _neighborsAll = await neighborsResp.json();
+    _topTokensAll = await topTokensResp.json();
+    _searchIndex = await searchResp.json();
+    // Merge any localStorage label overrides
+    try {
+        const saved = JSON.parse(localStorage.getItem('sae_labels') || '{}');
+        for (const [fid, interp] of Object.entries(saved)) {
+            if (!featureLabels[fid]) featureLabels[fid] = {interp: '', autointerp: '', confidence: ''};
+            featureLabels[fid].interp = interp;
+        }
+    } catch(e) {}
+    features = data.features;
+    meta = data.meta;
+
+    // Store original coordinates for spread adjustment
+    for (const f of features) {
+        f._ox = f.x; f._oy = f.y;
+        if (f.x3 !== undefined) { f._ox3 = f.x3; f._oy3 = f.y3; f._oz3 = f.z3; }
+    }
+
+    // Precompute percentile ranks for color mapping (so colors span full spectrum)
+    const byDensity = features.slice().sort((a, b) => a.d - b.d);
+    const byMean = features.slice().sort((a, b) => a.mn - b.mn);
+    const byMax = features.slice().sort((a, b) => a.mx - b.mx);
+    const n = features.length;
+    for (let i = 0; i < n; i++) {
+        byDensity[i]._rd = i / (n - 1);
+        byMean[i]._rm = i / (n - 1);
+        byMax[i]._rx = i / (n - 1);
+    }
+
+    applySpread(parseFloat(document.getElementById("spread-slider").value));
+    computeBounds();
+
+    toolbarStats.textContent = `${meta.n_features.toLocaleString()} features | ${meta.n_tokens.toLocaleString()} tokens | step ${meta.step.toLocaleString()}`;
+
+    resize();
+    resetView();
+    draw();
+}
+
+// === Spread: power-law scaling from centroid ===
+let spreadValue = 1.0;
+
+function applySpread(s) {
+    spreadValue = s;
+    if (features.length === 0) return;
+
+    // 2D spread
+    let cx2 = 0, cy2 = 0;
+    for (const f of features) { cx2 += f._ox; cy2 += f._oy; }
+    cx2 /= features.length; cy2 /= features.length;
+
+    for (const f of features) {
+        const dx = f._ox - cx2;
+        const dy = f._oy - cy2;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 1e-8) { f.x = f._ox; f.y = f._oy; continue; }
+        const scaled = Math.pow(dist, s);
+        const ratio = scaled / dist;
+        f.x = cx2 + dx * ratio;
+        f.y = cy2 + dy * ratio;
+    }
+
+    // 3D spread
+    if (features[0]._ox3 !== undefined) {
+        let cx3 = 0, cy3 = 0, cz3 = 0;
+        for (const f of features) { cx3 += f._ox3; cy3 += f._oy3; cz3 += f._oz3; }
+        cx3 /= features.length; cy3 /= features.length; cz3 /= features.length;
+
+        for (const f of features) {
+            const dx = f._ox3 - cx3;
+            const dy = f._oy3 - cy3;
+            const dz = f._oz3 - cz3;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist < 1e-8) { f.x3 = f._ox3; f.y3 = f._oy3; f.z3 = f._oz3; continue; }
+            const scaled = Math.pow(dist, s);
+            const ratio = scaled / dist;
+            f.x3 = cx3 + dx * ratio;
+            f.y3 = cy3 + dy * ratio;
+            f.z3 = cz3 + dz * ratio;
+        }
+    }
+}
+
+function computeBounds() {
+    dataXMin = Infinity; dataXMax = -Infinity;
+    dataYMin = Infinity; dataYMax = -Infinity;
+    for (const f of features) {
+        if (f.x < dataXMin) dataXMin = f.x;
+        if (f.x > dataXMax) dataXMax = f.x;
+        if (f.y < dataYMin) dataYMin = f.y;
+        if (f.y > dataYMax) dataYMax = f.y;
+    }
+    const padX = (dataXMax - dataXMin) * 0.05;
+    const padY = (dataYMax - dataYMin) * 0.05;
+    dataXMin -= padX; dataXMax += padX;
+    dataYMin -= padY; dataYMax += padY;
+}
+
+// Spread slider handler
+const spreadSlider = document.getElementById("spread-slider");
+const spreadVal = document.getElementById("spread-val");
+spreadSlider.addEventListener("input", () => {
+    const s = parseFloat(spreadSlider.value);
+    spreadVal.textContent = s.toFixed(1);
+    applySpread(s);
+    computeBounds();
+    if (viewMode === "2d") {
+        resetView();
+        draw();
+    } else if (threePoints) {
+        // Update 3D positions
+        const positions = threePoints.geometry.attributes.position.array;
+        let xMin = Infinity, xMax = -Infinity;
+        let yMin = Infinity, yMax = -Infinity;
+        let zMin = Infinity, zMax = -Infinity;
+        for (const f of features) {
+            if (f.x3 < xMin) xMin = f.x3;
+            if (f.x3 > xMax) xMax = f.x3;
+            if (f.y3 < yMin) yMin = f.y3;
+            if (f.y3 > yMax) yMax = f.y3;
+            if (f.z3 < zMin) zMin = f.z3;
+            if (f.z3 > zMax) zMax = f.z3;
+        }
+        const cx = (xMin + xMax) / 2;
+        const cy = (yMin + yMax) / 2;
+        const cz = (zMin + zMax) / 2;
+        const range = Math.max(xMax - xMin, yMax - yMin, zMax - zMin) || 1;
+        const scale3d = 20.0 / range;
+        for (let i = 0; i < features.length; i++) {
+            const f = features[i];
+            positions[i * 3] = (f.x3 - cx) * scale3d;
+            positions[i * 3 + 1] = (f.y3 - cy) * scale3d;
+            positions[i * 3 + 2] = (f.z3 - cz) * scale3d;
+        }
+        threePoints.geometry.attributes.position.needsUpdate = true;
+        updateThreeColors();
+    }
+});
+
+// === Glow intensity slider ===
+const glowSlider = document.getElementById("glow-slider");
+const glowVal = document.getElementById("glow-val");
+glowSlider.addEventListener("input", () => {
+    const v = parseInt(glowSlider.value) / 100;
+    glowVal.textContent = v.toFixed(1);
+    if (threePoints) {
+        threePoints.material.uniforms.glowIntensity.value = v;
+    }
+});
+
+// === UMAP recompute controls ===
+const umapToggle = document.getElementById("umap-toggle");
+const umapPanel = document.getElementById("umap-panel");
+const umapNeighborsSlider = document.getElementById("umap-neighbors");
+const umapMindistSlider = document.getElementById("umap-mindist");
+const umapStatus = document.getElementById("umap-status");
+
+umapToggle.addEventListener("click", () => {
+    umapPanel.classList.toggle("hidden");
+    umapToggle.classList.toggle("active", !umapPanel.classList.contains("hidden"));
+    setTimeout(() => { resize(); draw(); }, 50);
+});
+
+// Slider <-> editable value span wiring
+// Each entry: { slider, valSpan, toDisplay(sliderVal), toSlider(displayVal) }
+const umapSpreadSlider = document.getElementById("umap-spread");
+const umapEpochsSlider = document.getElementById("umap-epochs");
+const sliderConfigs = [
+    { slider: umapNeighborsSlider, valId: "umap-neighbors-val",
+      toDisplay: v => String(v), toSlider: v => Math.round(parseFloat(v)) },
+    { slider: umapMindistSlider, valId: "umap-mindist-val",
+      toDisplay: v => (v / 100).toFixed(2), toSlider: v => Math.round(parseFloat(v) * 100) },
+    { slider: umapSpreadSlider, valId: "umap-spread-val",
+      toDisplay: v => (v / 100).toFixed(2), toSlider: v => Math.round(parseFloat(v) * 100) },
+    { slider: umapEpochsSlider, valId: "umap-epochs-val",
+      toDisplay: v => v == 0 ? "auto" : String(v), toSlider: v => v === "auto" ? 0 : Math.round(parseFloat(v)) },
+];
+for (const cfg of sliderConfigs) {
+    const valSpan = document.getElementById(cfg.valId);
+    // Slider updates display
+    cfg.slider.addEventListener("input", () => {
+        valSpan.textContent = cfg.toDisplay(cfg.slider.value);
+    });
+    // Click on value -> editable input
+    valSpan.style.cursor = "pointer";
+    valSpan.title = "Click to type a value";
+    valSpan.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = valSpan.textContent;
+        input.style.cssText = "width:40px;font-size:11px;font-family:var(--mono);background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--accent);border-radius:3px;padding:0 2px;text-align:center";
+        valSpan.replaceWith(input);
+        input.focus();
+        input.select();
+        const commit = () => {
+            const raw = input.value.trim();
+            if (raw && !isNaN(parseFloat(raw))) {
+                const sliderVal = Math.max(
+                    parseInt(cfg.slider.min),
+                    Math.min(parseInt(cfg.slider.max), cfg.toSlider(raw))
+                );
+                cfg.slider.value = sliderVal;
+                valSpan.textContent = cfg.toDisplay(sliderVal);
+            }
+            input.replaceWith(valSpan);
+        };
+        input.addEventListener("blur", commit);
+        input.addEventListener("keydown", (ke) => {
+            if (ke.key === "Enter") input.blur();
+            if (ke.key === "Escape") { input.value = valSpan.textContent; input.blur(); }
+        });
+    });
+}
+
+async function recomputeUMAP(nComponents) {
+    const params = {
+        n_neighbors: parseInt(umapNeighborsSlider.value),
+        min_dist: umapMindistSlider.value / 100,
+        spread: umapSpreadSlider.value / 100,
+        n_epochs: parseInt(umapEpochsSlider.value),
+        metric: document.getElementById("umap-metric").value,
+        n_components: nComponents,
+    };
+
+    const btn2d = document.getElementById("umap-run-2d");
+    const btn3d = document.getElementById("umap-run-3d");
+    btn2d.disabled = btn3d.disabled = true;
+    umapStatus.textContent = `Computing ${nComponents}D UMAP...`;
+
+    try {
+        const resp = await fetch("/api/umap", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(params),
+        });
+        const data = await resp.json();
+        if (data.error) { umapStatus.textContent = `Error: ${data.error}`; return; }
+
+        // Apply new coordinates
+        for (const c of data.coords) {
+            const f = features[c.i];
+            if (!f) continue;
+            if (nComponents === 2) {
+                f._ox = c.x; f._oy = c.y;
+            } else {
+                f._ox3 = c.x3; f._oy3 = c.y3; f._oz3 = c.z3;
+            }
+        }
+
+        // Re-apply current spread
+        applySpread(spreadValue);
+        computeBounds();
+
+        if (nComponents === 2) {
+            resetView();
+            draw();
+        } else if (threePoints) {
+            // Update 3D positions
+            const positions = threePoints.geometry.attributes.position.array;
+            let xMin = Infinity, xMax = -Infinity;
+            let yMin = Infinity, yMax = -Infinity;
+            let zMin = Infinity, zMax = -Infinity;
+            for (const f of features) {
+                if (f.x3 < xMin) xMin = f.x3;
+                if (f.x3 > xMax) xMax = f.x3;
+                if (f.y3 < yMin) yMin = f.y3;
+                if (f.y3 > yMax) yMax = f.y3;
+                if (f.z3 < zMin) zMin = f.z3;
+                if (f.z3 > zMax) zMax = f.z3;
+            }
+            const cx = (xMin + xMax) / 2;
+            const cy = (yMin + yMax) / 2;
+            const cz = (zMin + zMax) / 2;
+            const range = Math.max(xMax - xMin, yMax - yMin, zMax - zMin) || 1;
+            const scale3d = 20.0 / range;
+            for (let i = 0; i < features.length; i++) {
+                const f = features[i];
+                positions[i * 3] = (f.x3 - cx) * scale3d;
+                positions[i * 3 + 1] = (f.y3 - cy) * scale3d;
+                positions[i * 3 + 2] = (f.z3 - cz) * scale3d;
+            }
+            threePoints.geometry.attributes.position.needsUpdate = true;
+            updateThreeColors();
+        }
+
+        umapStatus.textContent = `Done in ${data.elapsed}s`;
+    } catch (e) {
+        umapStatus.textContent = `Error: ${e.message}`;
+    } finally {
+        btn2d.disabled = btn3d.disabled = false;
+    }
+}
+
+document.getElementById("umap-run-2d").addEventListener("click", () => recomputeUMAP(2));
+document.getElementById("umap-run-3d").addEventListener("click", () => recomputeUMAP(3));
+
+// === Canvas sizing ===
+function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + "px";
+    canvas.style.height = rect.height + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function resetView() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    const dataW = dataXMax - dataXMin;
+    const dataH = dataYMax - dataYMin;
+    viewScale = Math.min(w / dataW, h / dataH) * 0.9;
+    viewX = w / 2 - (dataXMin + dataW / 2) * viewScale;
+    viewY = h / 2 + (dataYMin + dataH / 2) * viewScale;
+}
+
+function worldToScreen(wx, wy) {
+    return [wx * viewScale + viewX, -wy * viewScale + viewY];
+}
+
+function screenToWorld(sx, sy) {
+    return [(sx - viewX) / viewScale, -(sy - viewY) / viewScale];
+}
+
+// === Drawing ===
+function isDarkMode() {
+    return document.documentElement.getAttribute("data-theme") === "dark";
+}
+
+// HSL to RGB (h in 0-1, s in 0-1, l in 0-1) -> [r,g,b] each 0-1
+function hslToRgb(h, s, l) {
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const h6 = h * 6;
+    const x = c * (1 - Math.abs((h6 % 2) - 1));
+    const m = l - c / 2;
+    let r, g, b;
+    const sector = Math.floor(h6) % 6;
+    if (sector === 0) { r = c; g = x; b = 0; }
+    else if (sector === 1) { r = x; g = c; b = 0; }
+    else if (sector === 2) { r = 0; g = c; b = x; }
+    else if (sector === 3) { r = 0; g = x; b = c; }
+    else if (sector === 4) { r = x; g = 0; b = c; }
+    else { r = c; g = 0; b = x; }
+    return [r + m, g + m, b + m];
+}
+
+// Get rainbow color for a feature based on current colorMode
+// Uses percentile ranks (_rd, _rm, _rx) so colors span full spectrum
+function featureColorHSL(f) {
+    const dR = f._rd || 0;  // density rank 0-1
+    const mR = f._rm || 0;  // mean activation rank 0-1
+    const xR = f._rx || 0;  // max activation rank 0-1
+
+    if (colorMode === "position") {
+        const hue = (Math.atan2(f.y, f.x) + Math.PI) / (2 * Math.PI);
+        return [hue, 0.7, 0.35 + dR * 0.3];
+    } else if (colorMode === "density") {
+        return [0.65 - dR * 0.65, 0.7, 0.35 + dR * 0.25];
+    } else if (colorMode === "mean") {
+        return [0.65 - mR * 0.65, 0.75, 0.35 + mR * 0.25];
+    } else if (colorMode === "max") {
+        return [0.65 - xR * 0.65, 0.75, 0.35 + xR * 0.25];
+    } else { // act+density
+        const hue = 0.65 - mR * 0.65;
+        const sat = 0.3 + dR * 0.6;
+        const light = 0.3 + mR * 0.2 + dR * 0.15;
+        return [hue, sat, light];
+    }
+}
+
+function featureRainbowCSS(f, alpha) {
+    const [h, s, l] = featureColorHSL(f);
+    const [r, g, b] = hslToRgb(h, s, l);
+    return `rgba(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)},${alpha})`;
+}
+
+function draw() {
+    // In 3D mode, update three.js colors instead
+    if (viewMode === "3d") { updateThreeColors(); return; }
+
+    const rect = canvas.parentElement.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    const dark = isDarkMode();
+
+    // Clear with theme background
+    ctx.fillStyle = dark ? "#1a1a1a" : "#F3EDE3";
+    ctx.fillRect(0, 0, w, h);
+
+    const hoverSet = getEffectiveHoverHighlightSet();
+    const activeHighlight = (hoverSet && hoverSet.size > 0) ? hoverSet
+        : (inferHighlightSet && inferHighlightSet.size > 0) ? inferHighlightSet
+        : highlightSet;
+    const hasHighlight = activeHighlight && activeHighlight.size > 0;
+
+    for (const f of features) {
+        // Hide dead features if toggle is on
+        if (hideDead && featureLabels[f.i] && featureLabels[f.i].confidence === "dead") continue;
+
+        const [sx, sy] = worldToScreen(f.x, f.y);
+
+        // Skip if off screen
+        if (sx < -10 || sx > w + 10 || sy < -10 || sy > h + 10) continue;
+
+        const isHighlighted = hasHighlight && activeHighlight.has(f.i);
+        const isSelected = f.i === selectedIdx;
+
+        let r, alpha;
+        const logD = Math.log10(Math.max(f.d, 1e-6));
+        const t = Math.max(0, Math.min(1, (logD + 5) / 3.5));
+        alpha = 0.15 + t * 0.65;
+        r = 1.5 + t * 2.5;
+
+        if (isSelected) {
+            r = 6;
+            ctx.beginPath();
+            ctx.arc(sx, sy, r + 3, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(220, 160, 40, 0.25)";
+            ctx.fill();
+        }
+
+        // Only dim non-highlighted dots for focused highlights (click/infer/search), not hover
+        const hasFocusHighlight = (inferHighlightSet && inferHighlightSet.size > 0)
+            || (highlightSet && highlightSet.size > 0);
+        if (hasFocusHighlight && !isHighlighted && !isSelected) {
+            alpha = Math.max(alpha * 0.4, 0.1);
+            r = Math.max(r * 0.8, 1.5);
+        }
+
+        // Inference-highlighted features get extra emphasis
+        if (isHighlighted && inferHighlightSet && inferHighlightSet.size > 0) {
+            r = Math.max(r, 5);
+        }
+
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+
+        const isHoverHL = hoverSet && hoverSet.size > 0 && hoverSet.has(f.i);
+        const isSidebarHoverHL = sidebarHoverHighlightSet && sidebarHoverHighlightSet.size > 0 && sidebarHoverHighlightSet.has(f.i);
+        const isInferHL = inferHighlightSet && inferHighlightSet.size > 0 && inferHighlightSet.has(f.i);
+        const isSearchHL = highlightSet && highlightSet.size > 0 && highlightSet.has(f.i);
+
+        if (isSelected) {
+            ctx.fillStyle = "rgba(220, 160, 40, 1)";
+        } else if (isHoverHL) {
+            ctx.fillStyle = featureRainbowCSS(f, Math.min(1, alpha + 0.4));
+        } else if (isInferHL || isSearchHL) {
+            ctx.fillStyle = `rgba(220, 160, 40, ${Math.min(1, alpha + 0.3)})`;
+        } else {
+            const lb2d = featureLabels[f.i];
+            const isDead2d = lb2d && lb2d.confidence === "dead";
+            const hasGoodLabel = lb2d && (lb2d.interp || (lb2d.autointerp && !isDead2d));
+            ctx.fillStyle = featureRainbowCSS(f, isDead2d ? alpha * 0.4 : (hasGoodLabel ? Math.min(1, alpha + 0.15) : alpha));
+        }
+        ctx.fill();
+
+        // Status ring: dead=red, tentative=yellow, unlabeled=white, confident=none
+        if (!isSelected && !isHoverHL && !isInferHL && !isSearchHL) {
+            const lb = featureLabels[f.i];
+            let ringColor = null;
+            if (lb && lb.confidence === "dead") {
+                ringColor = `rgba(255, 60, 60, ${Math.min(1, alpha + 0.2)})`;
+            } else if (lb && lb.confidence === "tentative") {
+                ringColor = `rgba(201, 162, 39, ${Math.min(1, alpha + 0.2)})`;
+            } else if (!lb || (!lb.interp && !lb.autointerp)) {
+                ringColor = `rgba(255, 255, 255, ${Math.min(1, alpha + 0.1)})`;
+            }
+            // confident = no ring
+            if (ringColor) {
+                ctx.beginPath();
+                ctx.arc(sx, sy, r + 1.5, 0, Math.PI * 2);
+                ctx.strokeStyle = ringColor;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        // Ring around inference-highlighted features
+        if (isInferHL && !isSelected) {
+            ctx.beginPath();
+            ctx.arc(sx, sy, r + 2, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(220, 160, 40, 0.6)";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+
+        // Sidebar hover pulse: expanding white ring that fades out and loops
+        if (isSidebarHoverHL && !isSelected) {
+            const pulseT = (performance.now() % SIDEBAR_HOVER_PULSE_MS) / SIDEBAR_HOVER_PULSE_MS;
+            const pulseRadius = r + 2 + pulseT * 14;
+            const pulseAlpha = 0.85 * (1 - pulseT);
+            if (pulseAlpha > 0.01) {
+                ctx.beginPath();
+                ctx.arc(sx, sy, pulseRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(255, 255, 255, ${pulseAlpha})`;
+                ctx.lineWidth = Math.max(0.8, 2.0 - pulseT * 1.2);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // Draw neighbor lines from selected feature
+    if (selectedIdx !== null && neighborData && neighborData.length > 0) {
+        const selFeat = features.find(f => f.i === selectedIdx);
+        if (selFeat) {
+            const [sx, sy] = worldToScreen(selFeat.x, selFeat.y);
+            for (let ni = 0; ni < neighborData.length; ni++) {
+                const n = neighborData[ni];
+                const [nx, ny] = worldToScreen(n.x, n.y);
+                const lineAlpha = 0.15 + n.sim * 0.5;
+
+                ctx.beginPath();
+                ctx.moveTo(sx, sy);
+                ctx.lineTo(nx, ny);
+                ctx.strokeStyle = `rgba(220, 160, 40, ${lineAlpha})`;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Draw neighbor dot bigger
+                ctx.beginPath();
+                ctx.arc(nx, ny, 4, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(220, 160, 40, 0.7)`;
+                ctx.fill();
+                ctx.strokeStyle = "rgba(220, 160, 40, 0.9)";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+    }
+}
+
+// === Interaction: Pan & Zoom ===
+let isPanning = false;
+let panStartX, panStartY;
+
+canvas.addEventListener("mousedown", (e) => {
+    if (e.button === 0) {
+        isPanning = true;
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+        canvas.style.cursor = "grabbing";
+    }
+});
+
+window.addEventListener("mousemove", (e) => {
+    if (isPanning) {
+        const dx = e.clientX - panStartX;
+        const dy = e.clientY - panStartY;
+        viewX += dx;
+        viewY += dy;
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+        draw();
+    }
+});
+
+window.addEventListener("mouseup", () => {
+    isPanning = false;
+    canvas.style.cursor = "crosshair";
+});
+
+canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+
+    viewX = mx - (mx - viewX) * factor;
+    viewY = my - (my - viewY) * factor;
+    viewScale *= factor;
+
+    draw();
+}, { passive: false });
+
+// === Interaction: Click & Hover ===
+let clickStart = null;
+
+canvas.addEventListener("mousedown", (e) => {
+    clickStart = { x: e.clientX, y: e.clientY, time: Date.now() };
+});
+
+canvas.addEventListener("mouseup", async (e) => {
+    if (!clickStart) return;
+    const dx = e.clientX - clickStart.x;
+    const dy = e.clientY - clickStart.y;
+    const dt = Date.now() - clickStart.time;
+    clickStart = null;
+
+    // Only count as click if mouse didn't move much and was quick
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5 || dt > 300) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const closest = findClosest(mx, my, 8);
+    if (closest) {
+        selectedIdx = closest.i;
+        draw();
+        await showFeature(closest.i);
+    } else {
+        // Clicked empty space — deselect everything
+        selectedIdx = null;
+        neighborData = null;
+        highlightSet = null;
+        searchResults = null;
+        searchInput.value = "";
+        searchStatus.textContent = "";
+        draw();
+    }
+});
+
+let canvasHoverIdx = null; // Feature index currently hovered on canvas
+
+canvas.addEventListener("mousemove", (e) => {
+    if (isPanning) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const closest = findClosest(mx, my, 8);
+    if (closest) {
+        tooltip.style.display = "block";
+        tooltip.style.left = (e.clientX + 14) + "px";
+        tooltip.style.top = (e.clientY + 14) + "px";
+        const label = featureLabels[closest.i];
+        const interpText = label && label.interp ? label.interp : (label && label.autointerp && label.autointerp !== "dead" ? label.autointerp : "");
+        const isTentative = label && label.confidence === "tentative";
+        const interpStr = interpText ? `<div class="tt-interp" style="${isTentative ? 'color:#c9a227' : ''}">${isTentative ? '⚠ ' : ''}${escapeHtml(interpText)}</div>` : '';
+        tooltip.innerHTML = `<div class="tt-idx">Feature #${closest.i}</div>` +
+            interpStr +
+            `<div class="tt-stats">density: ${(closest.d * 100).toFixed(2)}% | max: ${closest.mx.toFixed(3)}</div>`;
+        canvas.style.cursor = "pointer";
+
+        // Highlight hovered dot (orange) even when something else is selected
+        if (canvasHoverIdx !== closest.i) {
+            canvasHoverIdx = closest.i;
+            hoverHighlightSet = new Set([closest.i]);
+            draw();
+        }
+    } else {
+        tooltip.style.display = "none";
+        if (!isPanning) canvas.style.cursor = "crosshair";
+        if (canvasHoverIdx !== null) {
+            canvasHoverIdx = null;
+            hoverHighlightSet = null;
+            draw();
+        }
+    }
+});
+
+canvas.addEventListener("mouseleave", () => {
+    tooltip.style.display = "none";
+    if (canvasHoverIdx !== null) {
+        canvasHoverIdx = null;
+        hoverHighlightSet = null;
+        draw();
+    }
+});
+
+function findClosest(sx, sy, maxDist) {
+    let best = null, bestDist = Infinity;
+    for (const f of features) {
+        const [fx, fy] = worldToScreen(f.x, f.y);
+        const d = Math.hypot(sx - fx, sy - fy);
+        if (d < bestDist && d < maxDist) {
+            best = f;
+            bestDist = d;
+        }
+    }
+    return best;
+}
+
+// === Sidebar ===
+let neighborData = null; // [{i, sim, x, y}, ...]
+
+async function showFeature(idx) {
+    sidebar.classList.remove("collapsed");
+    sidebarBody.innerHTML = '<div class="loading"><div class="spinner"></div><br>Loading...</div>';
+
+    // Clear old neighbors immediately so stale lines don't show
+    neighborData = null;
+    updateThreeNeighborLines();
+    draw();
+
+    try {
+        // Fetch all three in parallel
+        const [featureResp, neighborsResp, tokensResp] = await Promise.all([
+            fetch(`/api/feature/${idx}`),
+            fetch(`/api/neighbors/${idx}`),
+            fetch(`/api/top_tokens/${idx}`),
+        ]);
+        const data = await featureResp.json();
+        const nbrs = await neighborsResp.json();
+        const toks = await tokensResp.json();
+
+        neighborData = nbrs.neighbors || [];
+        updateThreeNeighborLines();
+        draw(); // redraw with neighbor lines
+
+        renderFeature(data, toks.tokens || [], neighborData);
+    } catch (e) {
+        sidebarBody.innerHTML = `<div class="loading">Error: ${e.message}</div>`;
+    }
+}
+
+// Ring texture for labeled features (created once, reused)
+// Ring textures cached per color (see _ringTexCache)
+const _ringTexCache = {};
+function getRingTexture(color) {
+    if (_ringTexCache[color]) return _ringTexCache[color];
+    const sz = 64;
+    const c = document.createElement("canvas");
+    c.width = sz; c.height = sz;
+    const ctx = c.getContext("2d");
+    ctx.clearRect(0, 0, sz, sz);
+    ctx.beginPath();
+    ctx.arc(sz/2, sz/2, sz/2 - 4, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    _ringTexCache[color] = new THREE.CanvasTexture(c);
+    return _ringTexCache[color];
+}
+
+function getFeatureRingColor(featureIdx) {
+    // dead=red, tentative=yellow, unlabeled=white, confident=null (no ring)
+    const lb = featureLabels[featureIdx];
+    if (lb && lb.confidence === "dead") return "rgba(255, 60, 60, 0.7)";
+    if (lb && lb.confidence === "tentative") return "rgba(201, 162, 39, 0.7)";
+    if (!lb || (!lb.interp && !lb.autointerp)) return "rgba(255, 255, 255, 0.4)";
+    return null; // confident — no ring
+}
+
+function updateThreeLabelRings() {
+    if (!threeScene || !threePoints) return;
+    // Remove old rings
+    const oldGroup = threeScene.getObjectByName("labelRings");
+    if (oldGroup) threeScene.remove(oldGroup);
+
+    const pos = threePoints.geometry.attributes.position.array;
+    const group = new THREE.Group();
+    group.name = "labelRings";
+
+    for (let i = 0; i < features.length; i++) {
+        const f = features[i];
+        if (hideDead && featureLabels[f.i] && featureLabels[f.i].confidence === "dead") continue;
+        const ringColor = getFeatureRingColor(f.i);
+        if (!ringColor) continue;
+
+        const mat = new THREE.SpriteMaterial({
+            map: getRingTexture(ringColor),
+            transparent: true,
+            depthWrite: false,
+            depthTest: true,
+        });
+        const sprite = new THREE.Sprite(mat);
+        sprite.position.set(pos[i*3], pos[i*3+1], pos[i*3+2]);
+        sprite.userData.featureIdx = f.i;
+        group.add(sprite);
+    }
+    threeScene.add(group);
+}
+
+// Update 3D neighbor lines (no-op in 2D mode)
+function updateThreeNeighborLines() {
+    if (viewMode !== "3d" || !threeScene) return;
+
+    // Remove old lines
+    const old = threeScene.getObjectByName("neighborLines");
+    if (old) threeScene.remove(old);
+    const oldGlow = threeScene.getObjectByName("selectedGlow");
+    if (oldGlow) threeScene.remove(oldGlow);
+
+    if (selectedIdx === null || !neighborData || neighborData.length === 0) return;
+
+    const positions = threePoints.geometry.attributes.position.array;
+
+    // Find selected feature's array index
+    const selArrayIdx = features.findIndex(f => f.i === selectedIdx);
+    if (selArrayIdx < 0) return;
+    const sx = positions[selArrayIdx * 3];
+    const sy = positions[selArrayIdx * 3 + 1];
+    const sz = positions[selArrayIdx * 3 + 2];
+
+    // Build line geometry
+    const linePositions = [];
+    const lineColors = [];
+    for (const n of neighborData) {
+        const nArrayIdx = features.findIndex(f => f.i === n.i);
+        if (nArrayIdx < 0) continue;
+        const nx = positions[nArrayIdx * 3];
+        const ny = positions[nArrayIdx * 3 + 1];
+        const nz = positions[nArrayIdx * 3 + 2];
+
+        linePositions.push(sx, sy, sz, nx, ny, nz);
+        const alpha = 0.4 + n.sim * 0.6;
+        lineColors.push(0.5 * alpha, 0.6 * alpha, 0.8 * alpha, 0.5 * alpha, 0.6 * alpha, 0.8 * alpha);
+    }
+
+    if (linePositions.length > 0) {
+        const lineGeo = new THREE.BufferGeometry();
+        lineGeo.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+        lineGeo.setAttribute("color", new THREE.Float32BufferAttribute(lineColors, 3));
+        const lineMat = new THREE.LineBasicMaterial({
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.5,
+            depthTest: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+        });
+        const lines = new THREE.LineSegments(lineGeo, lineMat);
+        lines.name = "neighborLines";
+        threeScene.add(lines);
+    }
+
+}
+
+function renderFeature(data, topTokens, neighbors) {
+    // Clear stale sidebar-hover pulse when loading a new feature panel
+    setSidebarHoverFeature(null);
+
+    const label = featureLabels[data.feature_idx] || {};
+    const interpVal = label.interp || "";
+    let html = "";
+
+    // Back to Combined button when drilling in from combined view
+    if (_combinedViewState) {
+        html += `<button id="back-to-combined" class="infer-toggle" style="margin-bottom:8px;background:var(--bg-secondary);border-color:var(--border);font-size:11px;padding:4px 10px">← Combined</button>`;
+    }
+
+    html += `<div class="feature-title">Feature <span class="idx">#${data.feature_idx}</span></div>`;
+
+    // Editable interpretation field
+    html += `<div class="interp-box">
+        <input type="text" class="interp-input" id="interp-input" value="${escapeHtml(interpVal)}" placeholder="Label this feature..." data-feature="${data.feature_idx}">
+        <button class="interp-save" id="interp-save">Save</button>
+    </div>`;
+
+    // Autointerp label (shown below human label box)
+    if (label.autointerp && label.autointerp !== "dead") {
+        const isTentative = label.confidence === "tentative";
+        const badgeColor = isTentative ? "#c9a227" : "#4a9eff";
+        const badgeText = isTentative ? "tentative" : "auto";
+        html += `<div style="margin:4px 0 8px;font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:6px">
+            <span style="background:${badgeColor};color:#000;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;text-transform:uppercase">${badgeText}</span>
+            <span style="font-style:italic;${isTentative ? 'color:#c9a227' : ''}">${escapeHtml(label.autointerp)}</span>
+        </div>`;
+    }
+
+    // Positional warning
+    if (data.position_info && data.position_info.is_positional) {
+        html += `<div style="background:#FFF3CD;border:1px solid #E0C97A;border-radius:6px;padding:8px 12px;margin:8px 0;font-size:12px;color:#856404">
+            Positional feature: fires at position ${data.position_info.top_position} in chunk (${(data.position_info.concentration * 100).toFixed(0)}% concentration)
+        </div>`;
+    }
+
+    html += `<div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Density</div>
+            <div class="stat-value">${(data.density * 100).toFixed(3)}%</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Max Activation</div>
+            <div class="stat-value">${data.max_act.toFixed(4)}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Mean Activation</div>
+            <div class="stat-value">${data.mean_act.toFixed(4)}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Fire Count</div>
+            <div class="stat-value">${data.fire_count.toLocaleString()}</div>
+        </div>
+    </div>`;
+
+    // Top tokens
+    if (topTokens.length > 0) {
+        html += `<div class="examples-header">Top Activating Tokens</div>`;
+        html += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">`;
+        for (const tok of topTokens.slice(0, 20)) {
+            const text = displayToken(tok.text);
+            html += `<span style="display:inline-block;background:rgba(139,157,131,${Math.min(0.6, tok.mean_act * 0.3)});border:1px solid rgba(139,157,131,0.3);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:11px;white-space:pre" title="count: ${tok.count}, mean act: ${tok.mean_act}">${escapeHtml(text)}<span style="font-size:9px;opacity:0.6;margin-left:3px">${tok.count}</span></span>`;
+        }
+        html += `</div>`;
+    }
+
+    // Neighbors
+    if (neighbors.length > 0) {
+        html += `<div class="examples-header">Most Similar Features</div>`;
+        html += `<div style="margin-bottom:12px">`;
+        for (const n of neighbors.slice(0, 10)) {
+            html += `<div class="search-result-item" data-idx="${n.i}" style="padding:4px 8px">
+                <span class="feat-idx">#${n.i}${interpTag(n.i)}</span>
+                <div class="feat-bar"><div class="feat-bar-fill" style="width:${(n.sim * 100).toFixed(0)}%"></div></div>
+                <span class="feat-score">${n.sim.toFixed(3)}</span>
+            </div>`;
+        }
+        html += `</div>`;
+    }
+
+    // Examples
+    html += `<div class="examples-header">Top Activating Examples (${data.examples.length})</div>`;
+
+    for (const ex of data.examples) {
+        html += `<div class="example">`;
+        html += `<div class="peak">peak: ${ex.peak_activation.toFixed(3)}</div>`;
+        for (const span of ex.spans) {
+            if (span.a > 0.1) {
+                const intensity = Math.min(1, span.a / 10);
+                const bgAlpha = 0.1 + intensity * 0.5;
+                html += `<span class="tok hot" style="--intensity:${bgAlpha}" title="act: ${span.a}">${escapeHtml(span.t)}</span>`;
+            } else {
+                html += `<span class="tok">${escapeHtml(span.t)}</span>`;
+            }
+        }
+        html += `</div>`;
+    }
+
+    if (data.examples.length === 0) {
+        html += `<div class="loading">No examples found for this feature.</div>`;
+    }
+
+    sidebarBody.innerHTML = html;
+
+    // Click handlers on neighbor items
+    for (const el of sidebarBody.querySelectorAll(".search-result-item")) {
+        el.addEventListener("mouseenter", () => {
+            const nIdx = parseInt(el.dataset.idx);
+            if (Number.isInteger(nIdx)) setSidebarHoverFeature(nIdx);
+        });
+        el.addEventListener("mouseleave", () => {
+            setSidebarHoverFeature(null);
+        });
+        el.addEventListener("click", async () => {
+            setSidebarHoverFeature(null);
+            const nIdx = parseInt(el.dataset.idx);
+            selectedIdx = nIdx;
+            draw();
+            await showFeature(nIdx);
+        });
+    }
+
+    // Interp save handler
+    const interpInput = document.getElementById("interp-input");
+    const interpSave = document.getElementById("interp-save");
+    if (interpInput && interpSave) {
+        const saveInterp = async () => {
+            const featIdx = parseInt(interpInput.dataset.feature);
+            const val = interpInput.value.trim();
+            interpSave.textContent = "...";
+            interpSave.disabled = true;
+            try {
+                await fetch(`/api/label/${featIdx}`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({interp: val}),
+                });
+                // Update local cache
+                if (!featureLabels[featIdx]) featureLabels[featIdx] = {interp: "", autointerp: ""};
+                featureLabels[featIdx].interp = val;
+                if (viewMode === "3d") updateThreeLabelRings();
+                // Refresh proximity label if it exists
+                if (_proxLabelEls[featIdx]) {
+                    _proxLabelEls[featIdx].remove();
+                    delete _proxLabelEls[featIdx];
+                }
+                interpSave.textContent = "Saved";
+                setTimeout(() => { interpSave.textContent = "Save"; interpSave.disabled = false; }, 800);
+            } catch (e) {
+                interpSave.textContent = "Error";
+                setTimeout(() => { interpSave.textContent = "Save"; interpSave.disabled = false; }, 1500);
+            }
+        };
+        interpSave.addEventListener("click", saveInterp);
+        interpInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") saveInterp();
+        });
+    }
+
+    // Back to Combined button handler
+    const backBtn = document.getElementById("back-to-combined");
+    if (backBtn && _combinedViewState) {
+        backBtn.addEventListener("click", () => {
+            const state = _combinedViewState;
+            _combinedViewState = null;
+            selectedIdx = null;
+            neighborData = null;
+            updateThreeNeighborLines();
+            inferHighlightSet = state.highlightSet;
+            sidebarBody.innerHTML = state.html;
+            state.reattach();
+            draw();
+        });
+    }
+}
+
+function escapeHtml(s) {
+    if (!s) return "";
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function displayToken(s) {
+    if (!s || s.length === 0) return '\u2423';
+    return s;
+}
+
+function interpTag(featureIdx) {
+    // Returns HTML snippet for the interp label (human > autointerp fallback)
+    const label = featureLabels[featureIdx];
+    if (label && label.interp) return ` <span style="font-weight:700;font-style:italic;color:var(--accent);font-size:inherit">${escapeHtml(label.interp)}</span>`;
+    if (label && label.autointerp && label.autointerp !== "dead") {
+        const color = label.confidence === "tentative" ? "#c9a227" : "var(--text-dim)";
+        return ` <span style="font-style:italic;color:${color};font-size:inherit">${escapeHtml(label.autointerp)}</span>`;
+    }
+    return '';
+}
+function getEffectiveLabel(featureIdx) {
+    // Returns the best available label text for a feature
+    const label = featureLabels[featureIdx];
+    if (!label) return "";
+    return label.interp || label.autointerp || "";
+}
+
+document.getElementById("sidebar-close").addEventListener("click", () => {
+    setSidebarHoverFeature(null);
+    sidebar.classList.add("collapsed");
+    selectedIdx = null;
+    neighborData = null;
+    _combinedViewState = null;
+    activeInferTok = null;
+    inferHighlightSet = null;
+    inferTokensEl.querySelectorAll(".infer-tok").forEach(el => el.classList.remove("active"));
+    draw();
+});
+
+// === Search ===
+let searchTimeout = null;
+
+searchInput.addEventListener("input", () => {
+    clearTimeout(searchTimeout);
+    const q = searchInput.value.trim();
+
+    // Direct feature lookup by ID: type a number like "554" or "#554"
+    const idMatch = q.match(/^#?(\d+)$/);
+    if (idMatch) {
+        const fIdx = parseInt(idMatch[1]);
+        if (fIdx >= 0 && fIdx < features.length) {
+            searchStatus.textContent = `Feature #${fIdx}`;
+            highlightSet = new Set([fIdx]);
+            draw();
+            showFeature(fIdx);
+            return;
+        }
+    }
+
+    // Special filters: :tentative, :unlabeled, :confident, :dead
+    if (q.startsWith(":")) {
+        const filter = q.slice(1).toLowerCase();
+        const matches = [];
+        for (const f of features) {
+            const lb = featureLabels[f.i];
+            if (!lb) { if (filter === "unlabeled") matches.push(f.i); continue; }
+            if (filter === "tentative" && lb.confidence === "tentative") matches.push(f.i);
+            else if (filter === "unlabeled" && !lb.interp && !lb.autointerp) matches.push(f.i);
+            else if (filter === "confident" && lb.confidence === "confident" && !lb.interp) matches.push(f.i);
+            else if (filter === "dead" && lb.confidence === "dead") matches.push(f.i);
+        }
+        if (matches.length > 0) {
+            highlightSet = new Set(matches);
+            searchResults = null;
+            searchStatus.textContent = `${matches.length} ${filter} features`;
+            draw();
+            // Show first one
+            showFeature(matches[0]);
+        } else {
+            searchStatus.textContent = `0 ${filter} features`;
+            highlightSet = null;
+            draw();
+        }
+        return;
+    }
+
+    // Label search: match against interp + autointerp text
+    if (q.length >= 2) {
+        const qLower = q.toLowerCase();
+        const labelMatches = [];
+        for (const f of features) {
+            const lb = featureLabels[f.i];
+            if (!lb) continue;
+            const text = ((lb.interp || "") + " " + (lb.autointerp || "")).toLowerCase();
+            if (text.includes(qLower)) labelMatches.push(f.i);
+        }
+        if (labelMatches.length > 0) {
+            highlightSet = new Set(labelMatches);
+            searchResults = null;
+            searchStatus.textContent = `${labelMatches.length} label matches for "${q}"`;
+            draw();
+            return;
+        }
+    }
+
+    if (q.length < 2) {
+        highlightSet = null;
+        searchResults = null;
+        searchStatus.textContent = "";
+        draw();
+        return;
+    }
+
+    searchTimeout = setTimeout(async () => {
+        try {
+            searchStatus.textContent = "Searching...";
+            const resp = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+            const data = await resp.json();
+
+            if (data.features && data.features.length > 0) {
+                highlightSet = new Set(data.features.map(f => f.i));
+                searchResults = data.features;
+                searchStatus.textContent = `${data.n_matching_tokens} tokens, ${data.features.length} features`;
+                draw();
+                showSearchResults(data);
+            } else {
+                highlightSet = null;
+                searchResults = null;
+                searchStatus.textContent = "No matches";
+                draw();
+            }
+        } catch (e) {
+            searchStatus.textContent = "Search error";
+        }
+    }, 300);
+});
+
+function showSearchResults(data) {
+    sidebar.classList.remove("collapsed");
+    const maxScore = data.features[0]?.s || 1;
+
+    let html = `<div class="feature-title">Search: "${escapeHtml(data.query)}"</div>`;
+    html += `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">${data.n_matching_tokens} matching tokens, ${data.features.length} correlated features</div>`;
+    html += `<div class="examples-header">Top Correlated Features</div>`;
+    html += `<div class="search-results">`;
+
+    for (const f of data.features.slice(0, 30)) {
+        const pct = (f.s / maxScore * 100).toFixed(0);
+        html += `<div class="search-result-item" data-idx="${f.i}">
+            <span class="feat-idx">#${f.i}${interpTag(f.i)}</span>
+            <div class="feat-bar"><div class="feat-bar-fill" style="width:${pct}%"></div></div>
+            <span class="feat-score">${f.s.toFixed(1)}</span>
+        </div>`;
+    }
+
+    html += `</div>`;
+    sidebarBody.innerHTML = html;
+
+    // Click handlers on search results
+    for (const el of sidebarBody.querySelectorAll(".search-result-item")) {
+        el.addEventListener("click", async () => {
+            const idx = parseInt(el.dataset.idx);
+            selectedIdx = idx;
+            draw();
+            await showFeature(idx);
+        });
+    }
+}
+
+// === Color mode toggle ===
+document.getElementById("color-mode").addEventListener("change", (e) => {
+    colorMode = e.target.value;
+    draw();
+});
+
+// === Hide dead toggle ===
+document.getElementById("hide-dead").addEventListener("change", (e) => {
+    hideDead = e.target.checked;
+    draw();
+    if (viewMode === "3d") {
+        updateThreeColors();
+        updateThreeLabelRings();
+    }
+});
+
+// === Theme toggle ===
+const themeToggle = document.getElementById("theme-toggle");
+const savedTheme = localStorage.getItem("sae-theme");
+if (savedTheme === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+    themeToggle.textContent = "Light";
+    themeToggle.classList.add("active");
+}
+
+themeToggle.addEventListener("click", () => {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    if (isDark) {
+        document.documentElement.removeAttribute("data-theme");
+        themeToggle.textContent = "Dark";
+        themeToggle.classList.remove("active");
+        localStorage.setItem("sae-theme", "light");
+    } else {
+        document.documentElement.setAttribute("data-theme", "dark");
+        themeToggle.textContent = "Light";
+        themeToggle.classList.add("active");
+        localStorage.setItem("sae-theme", "dark");
+    }
+    draw();
+});
+
+// === Keyboard shortcuts ===
+function isTyping() {
+    const el = document.activeElement;
+    return el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+}
+
+// Global hotkeys removed — too dangerous (Esc nuked inference state, r reset view accidentally)
+
+// === Inference Panel ===
+let inferData = null;         // response from /api/infer
+let inferHighlightSet = null; // Set of feature indices to highlight on UMAP (from click)
+let hoverHighlightSet = null; // Set of feature indices to highlight on UMAP (from hover, temporary)
+let sidebarHoverHighlightSet = null; // Set from "Most Similar Features" hover in sidebar
+let sidebarPulseRaf = null;
+const SIDEBAR_HOVER_PULSE_MS = 900;
+let gpuReady = false;
+
+function getEffectiveHoverHighlightSet() {
+    return (sidebarHoverHighlightSet && sidebarHoverHighlightSet.size > 0)
+        ? sidebarHoverHighlightSet
+        : hoverHighlightSet;
+}
+
+function stopSidebarHoverPulseLoop() {
+    if (sidebarPulseRaf !== null) {
+        cancelAnimationFrame(sidebarPulseRaf);
+        sidebarPulseRaf = null;
+    }
+}
+
+function runSidebarHoverPulseLoop() {
+    if (!sidebarHoverHighlightSet || sidebarHoverHighlightSet.size === 0 || viewMode !== "2d") {
+        sidebarPulseRaf = null;
+        return;
+    }
+    draw();
+    sidebarPulseRaf = requestAnimationFrame(runSidebarHoverPulseLoop);
+}
+
+function setSidebarHoverFeature(featureIdx) {
+    const nextIdx = Number.isInteger(featureIdx) ? featureIdx : null;
+    const prevIdx = (sidebarHoverHighlightSet && sidebarHoverHighlightSet.size > 0)
+        ? sidebarHoverHighlightSet.values().next().value
+        : null;
+    if (prevIdx === nextIdx) return;
+
+    sidebarHoverHighlightSet = nextIdx === null ? null : new Set([nextIdx]);
+
+    if (sidebarHoverHighlightSet && viewMode === "2d") {
+        if (sidebarPulseRaf === null) {
+            sidebarPulseRaf = requestAnimationFrame(runSidebarHoverPulseLoop);
+        }
+    } else {
+        stopSidebarHoverPulseLoop();
+    }
+
+    if (viewMode === "3d") updateThreeColors();
+    else draw();
+}
+
+const inferToggle = document.getElementById("infer-toggle");
+const inferPanel = document.getElementById("infer-panel");
+const inferText = document.getElementById("infer-text");
+const inferRun = document.getElementById("infer-run");
+const inferTokensEl = document.getElementById("infer-tokens");
+const inferPopup = document.getElementById("infer-popup");
+
+// Check GPU status on load
+fetch("/api/gpu_status").then(r => r.json()).then(d => {
+    gpuReady = d.gpu_ready;
+    if (gpuReady) {
+        inferToggle.title = "Live inference";
+    } else {
+        inferToggle.title = "GPU not loaded (start with --gpu)";
+        inferToggle.style.opacity = "0.4";
+    }
+});
+
+inferToggle.addEventListener("click", () => {
+    if (!gpuReady) {
+        alert("GPU not loaded. Restart server with: uv run explorer/app.py --gpu");
+        return;
+    }
+    const open = inferPanel.classList.toggle("hidden");
+    inferToggle.classList.toggle("active", !inferPanel.classList.contains("hidden"));
+    if (inferPanel.classList.contains("hidden")) {
+        // Clear inference highlights when closing
+        inferHighlightSet = null;
+        inferPopup.style.display = "none";
+    }
+    // Resize canvas after panel toggle changes layout
+    setTimeout(() => {
+        resize();
+        if (viewMode === "3d" && threeRenderer) {
+            const rect = canvasContainer.getBoundingClientRect();
+            threeCamera.aspect = rect.width / rect.height;
+            threeCamera.updateProjectionMatrix();
+            threeRenderer.setSize(rect.width, rect.height);
+        }
+        draw();
+    }, 50);
+});
+
+const inferCombined = document.getElementById("infer-combined");
+
+inferRun.addEventListener("click", runInference);
+inferCombined.addEventListener("click", runCombinedInference);
+inferText.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.ctrlKey) {
+        e.preventDefault();
+        runInference();
+    }
+});
+
+async function runInference() {
+    const text = inferText.value.trim();
+    if (!text) return;
+
+    inferRun.disabled = true;
+    inferRun.textContent = "Running...";
+    inferTokensEl.innerHTML = '<span style="color:var(--text-muted);font-family:var(--font);font-size:12px">Analyzing...</span>';
+
+    try {
+        const resp = await fetch("/api/infer", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({text}),
+        });
+        const data = await resp.json();
+        if (data.error) {
+            inferTokensEl.innerHTML = `<span style="color:#c00;font-family:var(--font);font-size:12px">${escapeHtml(data.error)}</span>`;
+            return;
+        }
+        inferData = data.tokens;
+        renderInferTokens();
+    } catch (e) {
+        inferTokensEl.innerHTML = `<span style="color:#c00;font-family:var(--font);font-size:12px">Error: ${e.message}</span>`;
+    } finally {
+        inferRun.disabled = false;
+        inferRun.textContent = "Run";
+    }
+}
+
+async function runCombinedInference() {
+    const text = inferText.value.trim();
+    if (!text) return;
+
+    inferCombined.disabled = true;
+    inferCombined.textContent = "Running...";
+    inferTokensEl.innerHTML = '<span style="color:var(--text-muted);font-family:var(--font);font-size:12px">Analyzing combined features...</span>';
+
+    try {
+        const resp = await fetch("/api/infer", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({text}),
+        });
+        const data = await resp.json();
+        if (data.error) {
+            inferTokensEl.innerHTML = `<span style="color:#c00;font-family:var(--font);font-size:12px">${escapeHtml(data.error)}</span>`;
+            return;
+        }
+
+        // Aggregate features across ALL tokens
+        const featureMap = new Map(); // feature_id -> {total_act, count, max_act, x, y}
+        for (const tok of data.tokens) {
+            for (const f of tok.top_features) {
+                if (featureMap.has(f.feature)) {
+                    const entry = featureMap.get(f.feature);
+                    entry.total_act += f.activation;
+                    entry.max_act = Math.max(entry.max_act, f.activation);
+                    entry.count += 1;
+                } else {
+                    featureMap.set(f.feature, {
+                        feature: f.feature,
+                        total_act: f.activation,
+                        max_act: f.activation,
+                        count: 1,
+                        x: f.x, y: f.y,
+                    });
+                }
+            }
+        }
+
+        // Sort by total activation, take top features
+        const combined = [...featureMap.values()]
+            .sort((a, b) => b.total_act - a.total_act);
+        const topN = combined.slice(0, 30);
+
+        // Highlight all combined features on UMAP
+        closeInferPopup();
+        inferHighlightSet = new Set(topN.map(f => f.feature));
+        selectedIdx = null;
+        neighborData = null;
+        draw();
+
+        // Show in sidebar
+        sidebar.classList.remove("collapsed");
+        const nTokens = data.tokens.length;
+        const nFeatures = combined.length;
+
+        // Fetch top_tokens for top 15 features
+        const fetches = topN.slice(0, 15).map(f =>
+            fetch(`/api/top_tokens/${f.feature}`).then(r => r.json()).catch(() => ({tokens: []}))
+        );
+        const topTokenResults = await Promise.all(fetches);
+
+        const maxTotal = topN.length > 0 ? topN[0].total_act : 1;
+        let html = `<div class="feature-title">Combined Features</div>`;
+        html += `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:16px">${nTokens} tokens, ${nFeatures} unique features activated</div>`;
+
+        html += `<div class="examples-header">Top Features (by total activation)</div>`;
+        for (let fi = 0; fi < topN.length; fi++) {
+            const f = topN[fi];
+            const pct = (f.total_act / maxTotal * 100).toFixed(0);
+            const topToks = fi < 15 ? (topTokenResults[fi]?.tokens || []) : [];
+
+            html += `<div style="margin-bottom:12px;padding:10px 12px;background:var(--hover-bg);border-radius:8px;border-left:3px solid rgba(139,157,131,${f.total_act / maxTotal})">`;
+            html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer" class="token-feat-header" data-idx="${f.feature}">`;
+            html += `<span style="font-family:var(--mono);font-weight:600;color:var(--accent)">#${f.feature}${interpTag(f.feature)}</span>`;
+            html += `<div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;background:var(--accent);border-radius:2px;width:${pct}%"></div></div>`;
+            html += `<span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)" title="total: ${f.total_act.toFixed(3)}, max: ${f.max_act.toFixed(3)}, ${f.count} tokens">${f.total_act.toFixed(2)} <span style="font-size:9px;opacity:0.6">(${f.count}tok)</span></span>`;
+            html += `</div>`;
+
+            if (topToks.length > 0) {
+                html += `<div style="display:flex;flex-wrap:wrap;gap:3px">`;
+                for (const t of topToks.slice(0, 12)) {
+                    const text = displayToken(t.text);
+                    html += `<span style="display:inline-block;background:rgba(139,157,131,${Math.min(0.5, t.mean_act * 0.25)});border:1px solid rgba(139,157,131,0.2);border-radius:3px;padding:1px 5px;font-family:var(--mono);font-size:10px;white-space:pre" title="count: ${t.count}, mean act: ${t.mean_act.toFixed(3)}">${escapeHtml(text)}<span style="font-size:8px;opacity:0.5;margin-left:2px">${t.count}</span></span>`;
+                }
+                html += `</div>`;
+            }
+            html += `</div>`;
+        }
+
+        sidebarBody.innerHTML = html;
+
+        // Stash combined view state so we can return to it
+        const combinedHighlightSet = new Set(inferHighlightSet);
+        function attachCombinedHandlers() {
+            for (const el of sidebarBody.querySelectorAll(".token-feat-header")) {
+                el.addEventListener("click", async () => {
+                    const featIdx = parseInt(el.dataset.idx);
+                    // Stash current combined state before navigating away
+                    _combinedViewState = {
+                        html: sidebarBody.innerHTML,
+                        highlightSet: combinedHighlightSet,
+                        reattach: attachCombinedHandlers,
+                    };
+                    selectedIdx = featIdx;
+                    inferHighlightSet = null;
+                    draw();
+                    await showFeature(featIdx);
+                });
+            }
+        }
+        attachCombinedHandlers();
+
+        // Also show tokens below with per-token rendering
+        inferData = data.tokens;
+        renderInferTokens();
+
+    } catch (e) {
+        inferTokensEl.innerHTML = `<span style="color:#c00;font-family:var(--font);font-size:12px">Error: ${e.message}</span>`;
+    } finally {
+        inferCombined.disabled = false;
+        inferCombined.textContent = "Combined";
+    }
+}
+
+let activeInferTok = null; // Currently clicked inference token
+let _combinedViewState = null; // Stashed combined sidebar HTML + highlight set
+
+function renderInferTokens() {
+    inferTokensEl.innerHTML = "";
+    if (!inferData) return;
+
+    for (const tok of inferData) {
+        const span = document.createElement("span");
+        span.className = "infer-tok";
+        span.textContent = tok.token;
+        span.dataset.pos = tok.idx;
+
+        // Color intensity by max activation
+        const maxAct = tok.top_features.length > 0 ? tok.top_features[0].activation : 0;
+        const intensity = Math.min(0.4, maxAct * 0.15);
+        span.style.background = `rgba(139, 157, 131, ${intensity})`;
+
+        span.addEventListener("mouseenter", () => {
+            hoverHighlightSet = new Set(tok.top_features.map(f => f.feature));
+            draw();
+        });
+        span.addEventListener("mouseleave", () => {
+            hoverHighlightSet = null;
+            draw();
+        });
+        span.addEventListener("click", (e) => {
+            e.stopPropagation();
+            hoverHighlightSet = null;
+            toggleTokenPopup(tok, e.target);
+        });
+        inferTokensEl.appendChild(span);
+    }
+}
+
+function toggleTokenPopup(tok, spanEl) {
+    // If clicking the same token, close it
+    if (activeInferTok === tok.idx) {
+        closeInferPopup();
+        return;
+    }
+
+    activeInferTok = tok.idx;
+
+    // Highlight features on UMAP
+    inferHighlightSet = new Set(tok.top_features.map(f => f.feature));
+    draw();
+
+    // Mark active token
+    inferTokensEl.querySelectorAll(".infer-tok").forEach(el => el.classList.remove("active"));
+    spanEl.classList.add("active");
+
+    // Position popup
+    const rect = spanEl.getBoundingClientRect();
+    inferPopup.style.display = "block";
+    inferPopup.style.left = Math.min(rect.left, window.innerWidth - 300) + "px";
+    inferPopup.style.top = (rect.bottom + 6) + "px";
+
+    // Build popup content
+    const maxVal = tok.top_features.length > 0 ? tok.top_features[0].activation : 1;
+    let html = `<div class="popup-header">"${escapeHtml(tok.token)}" — top features</div>`;
+    for (const f of tok.top_features) {
+        const pct = (f.activation / maxVal * 100).toFixed(0);
+        html += `<div class="popup-feat" data-feat="${f.feature}">
+            <span class="pf-idx">#${f.feature}${interpTag(f.feature)}</span>
+            <div class="pf-bar"><div class="pf-bar-fill" style="width:${pct}%"></div></div>
+            <span class="pf-val">${f.activation.toFixed(3)}</span>
+        </div>`;
+    }
+    if (tok.top_features.length === 0) {
+        html += '<div style="color:var(--text-muted);font-size:12px;padding:4px">No features fired</div>';
+    }
+    html += `<div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+        <button class="popup-sidebar-btn" style="width:100%;padding:6px;background:var(--accent);color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer">Show details + similar tokens</button>
+    </div>`;
+    inferPopup.innerHTML = html;
+
+    // Click feature in popup -> open feature detail in sidebar (keep popup open)
+    inferPopup.querySelectorAll(".popup-feat").forEach(el => {
+        el.addEventListener("click", async (ev) => {
+            ev.stopPropagation();
+            const featIdx = parseInt(el.dataset.feat);
+            selectedIdx = featIdx;
+            draw();
+            await showFeature(featIdx);
+        });
+    });
+
+    // "Show details" button -> open sidebar with full info (keep popup open)
+    inferPopup.querySelector(".popup-sidebar-btn").addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        showTokenInSidebar(tok);
+    });
+}
+
+function closeInferPopup() {
+    activeInferTok = null;
+    inferPopup.style.display = "none";
+    inferHighlightSet = null;
+    inferTokensEl.querySelectorAll(".infer-tok").forEach(el => el.classList.remove("active"));
+    draw();
+}
+
+// Close popup when clicking outside
+document.addEventListener("click", (e) => {
+    if (activeInferTok !== null && !inferPopup.contains(e.target) && !e.target.classList.contains("infer-tok")) {
+        closeInferPopup();
+    }
+});
+
+async function showTokenInSidebar(tok) {
+    // Close popup, keep highlights
+    inferPopup.style.display = "none";
+    activeInferTok = tok.idx; // Keep token visually active
+    inferHighlightSet = new Set(tok.top_features.map(f => f.feature));
+    selectedIdx = null;
+    neighborData = null;
+    draw();
+
+    // Mark clicked token
+    inferTokensEl.querySelectorAll(".infer-tok").forEach(el => el.classList.remove("active"));
+    const clickedSpan = inferTokensEl.querySelector(`[data-pos="${tok.idx}"]`);
+    if (clickedSpan) clickedSpan.classList.add("active");
+
+    // Open sidebar with loading state
+    sidebar.classList.remove("collapsed");
+    const tokDisplay = tok.token;
+    sidebarBody.innerHTML = `<div class="feature-title">Token: <span class="idx">"${escapeHtml(tokDisplay)}"</span></div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">Position ${tok.idx} — ${tok.top_features.length} active features</div>
+        <div class="loading"><div class="spinner"></div><br>Loading feature details...</div>`;
+
+    // Fetch top_tokens for each feature + similar tokens in parallel
+    const maxVal = tok.top_features.length > 0 ? tok.top_features[0].activation : 1;
+    const fetches = tok.top_features.map(f =>
+        fetch(`/api/top_tokens/${f.feature}`).then(r => r.json()).catch(() => ({tokens: []}))
+    );
+    const similarFetch = fetch("/api/similar_tokens", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({features: tok.top_features, n: 20}),
+    }).then(r => r.json()).catch(() => ({tokens: []}));
+
+    const [topTokenResults, similarData] = await Promise.all([
+        Promise.all(fetches),
+        similarFetch,
+    ]);
+
+    // Build sidebar content
+    let html = `<div class="feature-title">Token: <span class="idx">"${escapeHtml(tokDisplay)}"</span></div>`;
+    html += `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:16px">Position ${tok.idx} — ${tok.top_features.length} active features</div>`;
+
+    // Active features section
+    html += `<div class="examples-header">Active Features</div>`;
+    for (let fi = 0; fi < tok.top_features.length; fi++) {
+        const f = tok.top_features[fi];
+        const pct = (f.activation / maxVal * 100).toFixed(0);
+        const topToks = topTokenResults[fi]?.tokens || [];
+
+        html += `<div style="margin-bottom:12px;padding:10px 12px;background:var(--hover-bg);border-radius:8px;border-left:3px solid rgba(139,157,131,${f.activation / maxVal})">`;
+        html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer" class="token-feat-header" data-idx="${f.feature}">`;
+        html += `<span style="font-family:var(--mono);font-weight:600;color:var(--accent)">#${f.feature}${interpTag(f.feature)}</span>`;
+        html += `<div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;background:var(--accent);border-radius:2px;width:${pct}%"></div></div>`;
+        html += `<span style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">${f.activation.toFixed(3)}</span>`;
+        html += `</div>`;
+
+        if (topToks.length > 0) {
+            html += `<div style="display:flex;flex-wrap:wrap;gap:3px">`;
+            for (const t of topToks.slice(0, 12)) {
+                const text = displayToken(t.text);
+                html += `<span style="display:inline-block;background:rgba(139,157,131,${Math.min(0.5, t.mean_act * 0.25)});border:1px solid rgba(139,157,131,0.2);border-radius:3px;padding:1px 5px;font-family:var(--mono);font-size:10px;white-space:pre" title="count: ${t.count}, mean act: ${t.mean_act.toFixed(3)}">${escapeHtml(text)}<span style="font-size:8px;opacity:0.5;margin-left:2px">${t.count}</span></span>`;
+            }
+            html += `</div>`;
+        }
+        html += `</div>`;
+    }
+
+    // Similar tokens section
+    const simTokens = similarData.tokens || [];
+    if (simTokens.length > 0) {
+        html += `<div class="examples-header" style="margin-top:20px">Similar Feature Combinations</div>`;
+        html += `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Tokens from training data that activate similar features</div>`;
+        html += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">`;
+        for (const st of simTokens) {
+            const text = displayToken(st.text);
+            const overlapPct = st.overlap / st.total_query;
+            html += `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(139,157,131,${Math.min(0.5, overlapPct * 0.6)});border:1px solid rgba(139,157,131,0.3);border-radius:4px;padding:3px 8px;font-family:var(--mono);font-size:12px;white-space:pre;cursor:default" title="${st.overlap}/${st.total_query} features shared (${st.shared_features.map(f=>'#'+f).join(', ')})\nAppears ${st.count}x in training data">${escapeHtml(text)}<span style="font-size:9px;color:var(--text-muted);font-family:var(--font)">${st.overlap}/${st.total_query}</span></span>`;
+        }
+        html += `</div>`;
+    }
+
+    sidebarBody.innerHTML = html;
+
+    // Click feature header to open full feature detail
+    for (const el of sidebarBody.querySelectorAll(".token-feat-header")) {
+        el.addEventListener("click", async () => {
+            const featIdx = parseInt(el.dataset.idx);
+            selectedIdx = featIdx;
+            inferHighlightSet = null;
+            draw();
+            await showFeature(featIdx);
+        });
+    }
+}
+
+// === 3D View (Three.js) ===
+let viewMode = "2d"; // "2d" | "3d"
+let threeScene, threeCamera, threeRenderer, threePoints;
+let threeContainer = document.getElementById("three-container");
+let canvasContainer = document.getElementById("canvas-container");
+
+// Camera state — FPV (position + orientation)
+let camQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.3, 0.5, 0));
+let camPos = new THREE.Vector3(0, 0, 0); // start at center of cloud
+let threeDragging = false;
+let threeDragMode = null;
+let threeDragStart = { x: 0, y: 0 };
+let threeAutoRotate = false;
+let threeHoverIdx = null;
+const keysDown = new Set();
+let flySpeed = 0.02; // adjusted by scroll wheel
+
+// Color buffers for updates
+let pointColors = null;
+let pointSizes = null;
+let pointOpacities = null;
+let pointGlows = null;
+let pointRings = null;
+
+// === VR State ===
+let vrActive = false;
+let vrRig = null;
+let vrRayLine = null;
+let vrControllerR = null;
+let vrControllerL = null;
+let vrPanelMesh = null;
+let vrPanelCanvas = null;
+let vrPanelCtx = null;
+let vrPanelTexture = null;
+const VR_SCALE = 0.05; // Rig scale: smaller = more massive feeling (0.05 = 400m scene)
+const VR_FLY_SPEED = 0.04; // Scene-units/frame at full stick deflection
+let basePointMultiplier = 0; // Saved on init for VR uniform scaling
+let vrMaxRadius = 20; // leash: max distance from center, computed as 2x furthest point
+
+// VR grab-rotate state
+let vrGrabbing = false;
+let vrGrabStartLocal = null; // controller LOCAL pos when grab began (for tap detection)
+let vrGrabPrevLocal = null;  // controller LOCAL pos LAST FRAME (for incremental rotation)
+let vrGrabMoved = false;     // did controller move during grab? (false = tap = select)
+const VR_GRAB_THRESHOLD = 0.015; // local meters before drag vs tap
+const VR_ROTATE_SENS = 6.0; // radians per meter of hand movement
+const VR_ZOOM_SPEED = 0.06; // scene-units/frame when grip held
+let vrSelectorHand = 'right'; // which controller does ray+select+grab-rotate
+
+// VR panel drag state
+let vrPanelDragging = false;
+let vrPanelDragDist = 0.5; // WORLD distance from controller to panel during drag
+let vrRayHitDist = -1; // nearest hit in world units, -1 = no hit
+
+// VR panel scroll (R stick Y scrolls examples)
+let vrPanelScroll = 0;
+let vrPanelScrollMax = 0;
+let vrPanelFeatureData = null; // cached for scroll redraws
+let vrPanelTokenData = null;
+let vrDiagLog = []; // diagnostic frame log (uploaded on session end)
+
+// Inline VRButton (Three.js r128 VRButton is ES module, can't load via script tag)
+const VRButton = {
+    createButton(renderer) {
+        const button = document.createElement('button');
+        button.style.cssText = 'position:absolute;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 24px;border:1px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:13px;cursor:pointer;z-index:999;font-family:sans-serif;backdrop-filter:blur(8px);transition:opacity 0.2s';
+
+        function showEnterVR() {
+            button.textContent = 'ENTER VR';
+            button.style.opacity = '1';
+            button.disabled = false;
+            button.onclick = async () => {
+                try {
+                    const session = await navigator.xr.requestSession('immersive-vr', {
+                        optionalFeatures: ['local-floor', 'bounded-floor']
+                    });
+                    renderer.xr.setSession(session);
+                    button.textContent = 'EXIT VR';
+                    button.onclick = () => { session.end(); };
+                } catch (e) {
+                    console.error('VR session failed:', e);
+                }
+            };
+        }
+
+        if ('xr' in navigator) {
+            navigator.xr.isSessionSupported('immersive-vr').then(supported => {
+                if (supported) {
+                    showEnterVR();
+                } else {
+                    button.textContent = 'VR NOT SUPPORTED';
+                    button.disabled = true;
+                    button.style.opacity = '0.4';
+                }
+            });
+
+            renderer.xr.addEventListener('sessionstart', () => {
+                button.textContent = 'EXIT VR';
+            });
+            renderer.xr.addEventListener('sessionend', () => {
+                showEnterVR();
+            });
+        } else {
+            button.textContent = 'WEBXR NOT AVAILABLE';
+            button.disabled = true;
+            button.style.opacity = '0.4';
+        }
+
+        return button;
+    }
+};
+
+// VR panel canvas helper: rounded rect path
+function vrRoundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// Render feature info to VR panel canvas — sidebar-style layout
+// Compact token pills, color-highlighted examples, scroll support
+function renderVRPanel(data, topTokens) {
+    if (!vrPanelCtx) return;
+    const ctx = vrPanelCtx;
+    const w = vrPanelCanvas.width;
+    const h = vrPanelCanvas.height;
+
+    // Cache data for scroll redraws
+    if (data) {
+        vrPanelFeatureData = data;
+        vrPanelTokenData = topTokens;
+    }
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Dark glass background
+    ctx.fillStyle = 'rgba(10, 12, 18, 0.90)';
+    vrRoundRect(ctx, 0, 0, w, h, 20);
+    ctx.fill();
+
+    // Subtle border glow
+    ctx.strokeStyle = 'rgba(139, 157, 131, 0.30)';
+    ctx.lineWidth = 2;
+    vrRoundRect(ctx, 1, 1, w - 2, h - 2, 19);
+    ctx.stroke();
+
+    const pad = 28; // side padding
+
+    if (!data) {
+        // Initial state — instruction text
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.font = '28px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Point at a star', w / 2, h / 2 - 30);
+        ctx.fillText('and pull trigger', w / 2, h / 2 + 10);
+        ctx.font = '18px sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+        ctx.fillText('Grips: zoom | Trigger drag: rotate', w / 2, h / 2 + 50);
+        ctx.fillText('R-stick: scroll examples', w / 2, h / 2 + 76);
+        ctx.textAlign = 'left';
+    } else {
+        // === SIDEBAR-STYLE LAYOUT ===
+        // Clip to panel interior for scroll
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, w, h);
+        ctx.clip();
+
+        let y = 30 - vrPanelScroll; // scroll offset
+        ctx.textAlign = 'left';
+
+        // ── Feature title ──
+        ctx.fillStyle = 'rgba(139, 157, 131, 0.95)';
+        ctx.font = 'bold 30px sans-serif';
+        ctx.fillText(`Feature #${data.feature_idx}`, pad, y + 24);
+        y += 36;
+
+        // ── Interpretation label ──
+        const label = featureLabels[data.feature_idx];
+        if (label && label.interp) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.80)';
+            ctx.font = '20px sans-serif';
+            // Word-wrap interp text
+            const words = label.interp.split(' ');
+            let line = '';
+            const maxW = w - pad * 2;
+            y += 6;
+            for (const word of words) {
+                const test = line + (line ? ' ' : '') + word;
+                if (ctx.measureText(test).width > maxW && line) {
+                    y += 22;
+                    ctx.fillText(line, pad, y);
+                    line = word;
+                } else {
+                    line = test;
+                }
+            }
+            if (line) { y += 22; ctx.fillText(line, pad, y); }
+        }
+
+        // ── Thin divider ──
+        y += 14;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
+        y += 10;
+
+        // ── Stats grid (2x2 compact) ──
+        ctx.font = '14px sans-serif';
+        const stats = [
+            ['Density', (data.density * 100).toFixed(3) + '%'],
+            ['Max', data.max_act.toFixed(4)],
+            ['Mean', data.mean_act.toFixed(4)],
+            ['Fires', data.fire_count.toLocaleString()],
+        ];
+        const halfW = (w - pad * 2) / 2;
+        for (let i = 0; i < 4; i++) {
+            const col = i % 2;
+            const row = Math.floor(i / 2);
+            const sx = pad + col * halfW;
+            const sy = y + row * 32;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.40)';
+            ctx.font = '13px sans-serif';
+            ctx.fillText(stats[i][0], sx, sy + 14);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.90)';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText(stats[i][1], sx + 58, sy + 14);
+        }
+        y += 70;
+
+        // ── Top Tokens (compact pill flow) ──
+        if (topTokens && topTokens.length > 0) {
+            ctx.fillStyle = 'rgba(139, 157, 131, 0.60)';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.fillText('TOP TOKENS', pad, y);
+            y += 16;
+
+            // Flow layout: pills wrap horizontally
+            let px = pad;
+            ctx.font = '13px monospace';
+            const maxToks = Math.min(topTokens.length, 16);
+            const pillH = 22;
+            const pillGap = 5;
+
+            for (let i = 0; i < maxToks; i++) {
+                const tok = topTokens[i];
+                const text = (tok.text || '').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+                const display = text.length > 12 ? text.slice(0, 10) + '..' : text;
+                const label = `${display}`;
+                const tw = ctx.measureText(label).width + 14;
+
+                // Wrap to next line if overflow
+                if (px + tw > w - pad) {
+                    px = pad;
+                    y += pillH + pillGap;
+                }
+
+                // Pill bg — intensity from activation
+                const intensity = Math.min(0.5, (tok.mean_act || 0) * 0.25);
+                ctx.fillStyle = `rgba(139, 157, 131, ${0.12 + intensity})`;
+                vrRoundRect(ctx, px, y - 14, tw, pillH, 4);
+                ctx.fill();
+
+                // Pill border
+                ctx.strokeStyle = `rgba(139, 157, 131, ${0.2 + intensity})`;
+                ctx.lineWidth = 1;
+                vrRoundRect(ctx, px, y - 14, tw, pillH, 4);
+                ctx.stroke();
+
+                // Text
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.font = '13px monospace';
+                ctx.fillText(label, px + 6, y);
+
+                px += tw + pillGap;
+            }
+            y += pillH + 8;
+        }
+
+        // ── Divider ──
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
+        y += 14;
+
+        // ── Examples with color-highlighted tokens ──
+        if (data.examples && data.examples.length > 0) {
+            ctx.fillStyle = 'rgba(139, 157, 131, 0.60)';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.fillText(`EXAMPLES (${data.examples.length})`, pad, y);
+
+            // Scroll indicator
+            if (vrPanelScrollMax > 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText('R-stick ↕ scroll', w - pad, y);
+                ctx.textAlign = 'left';
+            }
+            y += 18;
+
+            // Find max activation for normalization
+            let maxAct = 1;
+            for (const ex of data.examples) {
+                for (const span of (ex.spans || [])) {
+                    if (span.a > maxAct) maxAct = span.a;
+                }
+            }
+
+            for (let ei = 0; ei < data.examples.length; ei++) {
+                const ex = data.examples[ei];
+                const spans = ex.spans || [];
+                if (spans.length === 0) continue;
+
+                // Example container bg
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+                // Measure total height needed (approx 2-4 lines)
+                const exTop = y;
+
+                // Peak activation badge
+                if (ex.peak_activation) {
+                    ctx.fillStyle = 'rgba(139, 157, 131, 0.50)';
+                    ctx.font = '11px sans-serif';
+                    ctx.fillText(`peak: ${ex.peak_activation.toFixed(3)}`, pad + 4, y + 10);
+                    y += 18;
+                }
+
+                // Render tokens with color highlighting — flow-wrap
+                ctx.font = '14px monospace';
+                let tx = pad + 4;
+                const lineH = 20;
+                const maxX = w - pad - 4;
+
+                for (const span of spans) {
+                    const t = (span.t || '').replace(/\n/g, ' ');
+                    if (!t) continue;
+                    const tw = ctx.measureText(t).width;
+
+                    // Wrap
+                    if (tx + tw > maxX && tx > pad + 20) {
+                        tx = pad + 4;
+                        y += lineH;
+                    }
+
+                    // Color highlight: activation → green bg intensity
+                    if (span.a > 0.1) {
+                        const norm = Math.min(1, span.a / maxAct);
+                        const bgAlpha = 0.08 + norm * 0.45;
+                        ctx.fillStyle = `rgba(139, 157, 131, ${bgAlpha})`;
+                        ctx.fillRect(tx - 1, y - 12, tw + 2, lineH - 2);
+                    }
+
+                    // Token text
+                    ctx.fillStyle = span.a > 0.1
+                        ? `rgba(255, 255, 255, ${0.7 + Math.min(0.3, span.a / maxAct * 0.3)})`
+                        : 'rgba(255, 255, 255, 0.50)';
+                    ctx.fillText(t, tx, y + 2);
+                    tx += tw;
+                }
+
+                y += lineH + 10;
+
+                // Thin separator between examples
+                if (ei < data.examples.length - 1) {
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.moveTo(pad + 8, y); ctx.lineTo(w - pad - 8, y); ctx.stroke();
+                    y += 8;
+                }
+
+                // Stop rendering if way below canvas (but track total for scroll)
+                if (y > h + vrPanelScroll + 200) break;
+            }
+
+            // Compute max scroll
+            const totalContentH = y + vrPanelScroll;
+            vrPanelScrollMax = Math.max(0, totalContentH - h + 30);
+        } else {
+            vrPanelScrollMax = 0;
+        }
+
+        ctx.restore();
+
+        // Scroll indicator bar (right edge)
+        if (vrPanelScrollMax > 0) {
+            const barH = Math.max(40, h * (h / (h + vrPanelScrollMax)));
+            const barY = (vrPanelScroll / vrPanelScrollMax) * (h - barH);
+            ctx.fillStyle = 'rgba(139, 157, 131, 0.25)';
+            vrRoundRect(ctx, w - 8, barY + 4, 4, barH - 8, 2);
+            ctx.fill();
+        }
+    }
+
+    if (vrPanelTexture) vrPanelTexture.needsUpdate = true;
+}
+
+const viewToggle = document.getElementById("view-toggle");
+viewToggle.addEventListener("click", () => {
+    if (viewMode === "2d") {
+        if (!features.some(f => f.x3 !== undefined)) {
+            alert("3D coordinates not found. Re-run precompute.py to generate 3D UMAP data.");
+            return;
+        }
+        viewMode = "3d";
+        viewToggle.textContent = "2D";
+        viewToggle.classList.add("active");
+        canvas.style.display = "none";
+        threeContainer.style.display = "block";
+        document.getElementById("glow-label").style.display = "flex";
+        stopSidebarHoverPulseLoop();
+        initThreeJS();
+    } else {
+        viewMode = "2d";
+        viewToggle.textContent = "3D";
+        viewToggle.classList.remove("active");
+        canvas.style.display = "block";
+        threeContainer.style.display = "none";
+        document.getElementById("glow-label").style.display = "none";
+        if (threeRenderer) {
+            if (threeRenderer.xr.isPresenting) {
+                threeRenderer.xr.getSession().end();
+            }
+            threeRenderer.setAnimationLoop(null);
+        }
+        // Clear 3D proximity labels and lines
+        for (const idx in _proxLabelEls) {
+            _proxLabelEls[idx].remove();
+            delete _proxLabelEls[idx];
+        }
+        _proxLinesCtx.clearRect(0, 0, _proxLinesCanvas.width, _proxLinesCanvas.height);
+        draw();
+        if (sidebarHoverHighlightSet && sidebarHoverHighlightSet.size > 0 && sidebarPulseRaf === null) {
+            sidebarPulseRaf = requestAnimationFrame(runSidebarHoverPulseLoop);
+        }
+    }
+});
+
+function initThreeJS() {
+    const rect = canvasContainer.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+
+    // Clean up previous
+    if (threeRenderer) {
+        threeRenderer.setAnimationLoop(null);
+        threeContainer.removeChild(threeRenderer.domElement);
+        threeRenderer.dispose();
+    }
+    // Remove old VR button if re-initializing
+    const oldVrBtn = threeContainer.querySelector('button');
+    if (oldVrBtn) oldVrBtn.remove();
+
+    threeScene = new THREE.Scene();
+    threeCamera = new THREE.PerspectiveCamera(60, w / h, 0.01, 1000);
+    threeRenderer = new THREE.WebGLRenderer({ antialias: true });
+    threeRenderer.setSize(w, h);
+    threeRenderer.setPixelRatio(window.devicePixelRatio || 1);
+    threeContainer.appendChild(threeRenderer.domElement);
+
+    // Enable WebXR
+    threeRenderer.xr.enabled = true;
+
+    // Camera rig — parent of camera + controllers. Scaling the rig makes the scene feel massive.
+    vrRig = new THREE.Group();
+    vrRig.add(threeCamera);
+    threeScene.add(vrRig);
+
+    // Build point cloud
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(features.length * 3);
+    pointColors = new Float32Array(features.length * 3);
+    pointSizes = new Float32Array(features.length);
+
+    // Compute 3D bounds for centering
+    let xMin = Infinity, xMax = -Infinity;
+    let yMin = Infinity, yMax = -Infinity;
+    let zMin = Infinity, zMax = -Infinity;
+    for (const f of features) {
+        if (f.x3 < xMin) xMin = f.x3;
+        if (f.x3 > xMax) xMax = f.x3;
+        if (f.y3 < yMin) yMin = f.y3;
+        if (f.y3 > yMax) yMax = f.y3;
+        if (f.z3 < zMin) zMin = f.z3;
+        if (f.z3 > zMax) zMax = f.z3;
+    }
+    const cx = (xMin + xMax) / 2;
+    const cy = (yMin + yMax) / 2;
+    const cz = (zMin + zMax) / 2;
+    const range = Math.max(xMax - xMin, yMax - yMin, zMax - zMin);
+    const scale3d = 20.0 / range; // normalize to ~[-10, 10]
+
+    for (let i = 0; i < features.length; i++) {
+        const f = features[i];
+        positions[i * 3] = (f.x3 - cx) * scale3d;
+        positions[i * 3 + 1] = (f.y3 - cy) * scale3d;
+        positions[i * 3 + 2] = (f.z3 - cz) * scale3d;
+
+        // Default — will be set by updateThreeColors
+        pointColors[i * 3] = 0.545;
+        pointColors[i * 3 + 1] = 0.616;
+        pointColors[i * 3 + 2] = 0.514;
+
+        pointSizes[i] = 1.0;
+    }
+
+    pointOpacities = new Float32Array(features.length).fill(1.0);
+    pointGlows = new Float32Array(features.length).fill(0.0);
+    pointRings = new Float32Array(features.length).fill(0.0);
+
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(pointColors, 3));
+    geometry.setAttribute("size", new THREE.BufferAttribute(pointSizes, 1));
+    geometry.setAttribute("opacity", new THREE.BufferAttribute(pointOpacities, 1));
+    geometry.setAttribute("glow", new THREE.BufferAttribute(pointGlows, 1));
+    geometry.setAttribute("ring", new THREE.BufferAttribute(pointRings, 1));
+
+    // Custom shader material — small crisp points with depth fog + glow
+    const material = new THREE.ShaderMaterial({
+        uniforms: {
+            pointMultiplier: { value: Math.min(w, h) * 0.8 },
+            fogNear: { value: 2.0 },
+            fogFar: { value: 45.0 },
+            glowIntensity: { value: 1.0 },
+        },
+        vertexShader: `
+            attribute float size;
+            attribute float opacity;
+            attribute float glow;
+            attribute float ring;
+            varying vec3 vColor;
+            varying float vDepth;
+            varying float vOpacity;
+            varying float vGlow;
+            varying float vRing;
+            varying float vSize;
+            uniform float pointMultiplier;
+            void main() {
+                vColor = color;
+                vOpacity = opacity;
+                vGlow = glow;
+                vRing = ring;
+                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                float depth = -mvPosition.z;
+                vDepth = depth;
+
+                // Steep depth scaling: depth^2 makes close stars dramatically bigger
+                float s = size * pointMultiplier / (max(depth, 0.1) * max(depth, 0.1));
+                if (glow > 0.0) s *= (1.0 + glow);
+                // Soft ceiling: keeps growing past 200 but logarithmically
+                if (s > 200.0) s = 200.0 + 40.0 * log(s / 200.0);
+                gl_PointSize = max(s, 0.3);
+                vSize = gl_PointSize;
+                gl_Position = projectionMatrix * mvPosition;
+            }
+        `,
+        fragmentShader: `
+            varying vec3 vColor;
+            varying float vDepth;
+            varying float vOpacity;
+            varying float vGlow;
+            varying float vRing;
+            varying float vSize;
+            uniform float fogNear;
+            uniform float fogFar;
+            uniform float glowIntensity;
+            void main() {
+                vec2 uv = gl_PointCoord - vec2(0.5);
+                float d = length(uv);
+                if (d > 0.5) discard;
+
+                float fogFactor = 1.0 - clamp((vDepth - fogNear) / (fogFar - fogNear), 0.0, 0.9);
+
+                vec3 col = vColor;
+                float alpha;
+
+                // White-hot core + colored tail glow
+                float inv = 1.0 / (1.0 + 2000.0 * d * d);
+                float core = inv * inv * inv; // cubed
+                float tail = 1.0 / (1.0 + 100.0 * d * d); // wider for visibility at distance
+
+                // Size-adaptive glow: far=lots, mid=suppressed, near=moderate
+                float tailScale = (0.4 / (1.0 + vSize * 0.25) + 0.02) * glowIntensity;
+
+                if (vGlow > 0.0) {
+                    // Thin crosshair pinpoint on hover/select
+                    float crossX = exp(-uv.y * uv.y * 2000.0) * exp(-abs(uv.x) * 6.0);
+                    float crossY = exp(-uv.x * uv.x * 2000.0) * exp(-abs(uv.y) * 6.0);
+                    float cross = (crossX + crossY) * 0.25 * vGlow;
+                    col = mix(col, vec3(1.0), core * vGlow * 0.4);
+                    alpha = (core + tail * tailScale * 0.5) * fogFactor;
+                } else {
+                    // Core goes full white, tail stays colored
+                    col = mix(col, vec3(1.0), core);
+                    alpha = (core + tail * tailScale) * fogFactor * vOpacity;
+                }
+
+
+                gl_FragColor = vec4(col, alpha);
+            }
+        `,
+        vertexColors: true,
+        transparent: true,
+        depthWrite: false,
+        depthTest: true,
+        blending: THREE.AdditiveBlending,
+    });
+
+    threePoints = new THREE.Points(geometry, material);
+    threeScene.add(threePoints);
+
+    // Add ring sprites for labeled features (auto-billboard = always face camera)
+    updateThreeLabelRings();
+
+    // Save base point multiplier for VR scaling
+    basePointMultiplier = Math.min(w, h) * 0.8;
+
+    // Compute leash radius: 2x the furthest point from center
+    let maxPtDist = 0;
+    for (let i = 0; i < features.length; i++) {
+        const dx = positions[i*3], dy = positions[i*3+1], dz = positions[i*3+2];
+        const d = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        if (d > maxPtDist) maxPtDist = d;
+    }
+    vrMaxRadius = maxPtDist * 2;
+
+    // === VR Setup ===
+    // VR button
+    const vrBtn = VRButton.createButton(threeRenderer);
+    threeContainer.appendChild(vrBtn);
+
+    // Controllers
+    vrControllerR = threeRenderer.xr.getController(1); // right hand
+    vrControllerL = threeRenderer.xr.getController(0); // left hand
+    vrRig.add(vrControllerR);
+    vrRig.add(vrControllerL);
+
+    // === VR Controller events ===
+    // Selector hand: grab-rotate (drag) / select star (tap) / drag panel (if pointing at it)
+    // Non-selector trigger: swap which hand is the selector
+
+    // Shared select logic (fetches feature data, updates panel)
+    async function vrSelectStar() {
+        if (threeHoverIdx === null) return;
+        const f = features[threeHoverIdx];
+        selectedIdx = f.i;
+        updateThreeColors();
+        vrPanelScroll = 0;
+        if (vrPanelMesh) vrPanelMesh.visible = true;
+
+        renderVRPanel({
+            feature_idx: f.i, density: f.d, max_act: f.mx,
+            mean_act: f.mn, fire_count: 0, examples: [],
+        }, []);
+
+        try {
+            const [featureResp, neighborsResp, tokensResp] = await Promise.all([
+                fetch(`/api/feature/${f.i}`),
+                fetch(`/api/neighbors/${f.i}`),
+                fetch(`/api/top_tokens/${f.i}`),
+            ]);
+            if (!featureResp.ok) throw new Error(`API ${featureResp.status}`);
+            const data = await featureResp.json();
+            const nbrs = await neighborsResp.json();
+            const toks = await tokensResp.json();
+            neighborData = nbrs.neighbors || [];
+            updateThreeNeighborLines();
+            renderFeature(data, toks.tokens || [], neighborData);
+            renderVRPanel(data, toks.tokens || []);
+        } catch (e) {
+            console.error('VR feature fetch error:', e);
+        }
+    }
+
+    // Check if controller ray hits the visible panel
+    function vrCheckPanelHit(ctrl) {
+        if (!vrPanelMesh || !vrPanelMesh.visible) return null;
+        ctrl.updateMatrixWorld(true);
+        const wp = new THREE.Vector3();
+        wp.setFromMatrixPosition(ctrl.matrixWorld);
+        const wq = new THREE.Quaternion();
+        ctrl.getWorldQuaternion(wq);
+        const wd = new THREE.Vector3(0, 0, -1).applyQuaternion(wq);
+        const rc = new THREE.Raycaster(wp, wd, 0, 100);
+        const hits = rc.intersectObject(vrPanelMesh);
+        return hits.length > 0 ? hits[0] : null;
+    }
+
+    // Swap selector to the given hand
+    function vrSwapSelector(hand) {
+        if (vrSelectorHand === hand) return;
+        vrSelectorHand = hand;
+        vrPanelDragging = false; // cancel any panel drag
+        const oldCtrl = hand === 'right' ? vrControllerL : vrControllerR;
+        const newCtrl = hand === 'right' ? vrControllerR : vrControllerL;
+        if (vrRayLine) {
+            oldCtrl.remove(vrRayLine);
+            newCtrl.add(vrRayLine);
+        }
+    }
+
+    // Selector trigger start: check panel hit → drag panel, else → grab-rotate
+    function vrSelectorStart(ctrl) {
+        // Priority 1: if pointing at panel, drag it
+        const panelHit = vrCheckPanelHit(ctrl);
+        if (panelHit) {
+            vrPanelDragging = true;
+            vrPanelDragDist = panelHit.distance; // world units
+            return;
+        }
+        // Priority 2: grab-rotate (or tap-to-select on release)
+        vrGrabbing = true;
+        vrGrabMoved = false;
+        vrGrabStartLocal = ctrl.position.clone();
+        vrGrabPrevLocal = ctrl.position.clone();
+    }
+
+    // Selector trigger end
+    async function vrSelectorEnd() {
+        if (vrPanelDragging) {
+            vrPanelDragging = false;
+            return;
+        }
+        if (!vrGrabbing) return;
+        vrGrabbing = false;
+        if (!vrGrabMoved) await vrSelectStar();
+    }
+
+    // Right controller trigger
+    vrControllerR.addEventListener('selectstart', () => {
+        if (!vrActive) return;
+        if (vrSelectorHand === 'right') {
+            vrSelectorStart(vrControllerR);
+        } else {
+            vrSwapSelector('right');
+        }
+    });
+    vrControllerR.addEventListener('selectend', async () => {
+        if (vrSelectorHand !== 'right') return;
+        await vrSelectorEnd();
+    });
+
+    // Left controller trigger
+    vrControllerL.addEventListener('selectstart', () => {
+        if (!vrActive) return;
+        if (vrSelectorHand === 'left') {
+            vrSelectorStart(vrControllerL);
+        } else {
+            vrSwapSelector('left');
+        }
+    });
+    vrControllerL.addEventListener('selectend', async () => {
+        if (vrSelectorHand !== 'left') return;
+        await vrSelectorEnd();
+    });
+
+    // Ray visualization (white line from right controller)
+    const rayPoints = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -50)];
+    const rayGeom = new THREE.BufferGeometry().setFromPoints(rayPoints);
+    const rayMat = new THREE.LineBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.4,
+        blending: THREE.AdditiveBlending,
+    });
+    vrRayLine = new THREE.Line(rayGeom, rayMat);
+    vrRayLine.visible = false;
+    vrControllerR.add(vrRayLine); // child of controller = moves with it
+
+    // VR info panel (canvas texture on plane)
+    vrPanelCanvas = document.createElement('canvas');
+    vrPanelCanvas.width = 1024;
+    vrPanelCanvas.height = 768;
+    vrPanelCtx = vrPanelCanvas.getContext('2d');
+    vrPanelTexture = new THREE.CanvasTexture(vrPanelCanvas);
+    vrPanelTexture.minFilter = THREE.LinearFilter;
+
+    const panelGeom = new THREE.PlaneGeometry(0.65, 0.50);
+    const panelMat = new THREE.MeshBasicMaterial({
+        map: vrPanelTexture,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+    });
+    vrPanelMesh = new THREE.Mesh(panelGeom, panelMat);
+    // Panel is child of camera — head-locked HUD, immune to rig rotation
+    // Position is in camera-local space (meters from your face)
+    vrPanelMesh.position.set(0.20, -0.15, -0.50);
+    vrPanelMesh.visible = false;
+    threeCamera.add(vrPanelMesh);
+
+    // Render initial panel state
+    renderVRPanel(null, null);
+
+    // Session start: enter VR
+    threeRenderer.xr.addEventListener('sessionstart', () => {
+        vrActive = true;
+
+        // Transfer camera position to rig
+        vrRig.position.copy(camPos);
+        vrRig.quaternion.copy(camQuat);
+        vrRig.scale.set(VR_SCALE, VR_SCALE, VR_SCALE);
+
+        // Reset camera local transform (XR headset manages it now)
+        threeCamera.position.set(0, 0, 0);
+        threeCamera.quaternion.identity();
+
+        // Adjust shader uniforms for rig scale
+        const invS = 1.0 / VR_SCALE;
+        threePoints.material.uniforms.fogNear.value = 2.0 * invS;
+        threePoints.material.uniforms.fogFar.value = 45.0 * invS;
+        threePoints.material.uniforms.pointMultiplier.value = basePointMultiplier * invS * invS * 4.0;
+        threePoints.material.uniforms.glowIntensity.value = 4.0;
+
+        vrPanelMesh.visible = false; // hidden until a star is selected
+        vrRayLine.visible = true;
+    });
+
+    // Session end: exit VR
+    threeRenderer.xr.addEventListener('sessionend', () => {
+        vrActive = false;
+
+        // Capture rig world position back to camPos
+        camPos.copy(vrRig.position);
+        camQuat.copy(vrRig.quaternion);
+
+        // Reset rig
+        vrRig.scale.set(1, 1, 1);
+
+        // Restore shader uniforms
+        threePoints.material.uniforms.fogNear.value = 2.0;
+        threePoints.material.uniforms.fogFar.value = 45.0;
+        threePoints.material.uniforms.pointMultiplier.value = basePointMultiplier;
+        threePoints.material.uniforms.glowIntensity.value = 1.0;
+
+        vrPanelMesh.visible = false;
+        vrRayLine.visible = false;
+
+        // Upload diagnostic log to server
+        if (vrDiagLog.length > 0) {
+            fetch('/api/vr_diag', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({log: vrDiagLog}),
+            }).then(r => r.json()).then(d => {
+                console.log('VR diag saved:', d);
+                toolbarStats.textContent += ` | VR diag: ${d.frames} frames saved`;
+            }).catch(e => console.error('VR diag upload failed:', e));
+        }
+
+        // Next frame, flat-mode code sets camera from camPos/camQuat
+    });
+
+    // Screen-space picking: project 3D points to screen and find closest to mouse
+    const _projVec = new THREE.Vector3();
+    function findClosest3D(screenX, screenY, maxDist) {
+        const positions = threePoints.geometry.attributes.position.array;
+        const rect = threeRenderer.domElement.getBoundingClientRect();
+        const hw = rect.width / 2;
+        const hh = rect.height / 2;
+        let bestIdx = -1, bestDist = Infinity;
+
+        for (let i = 0; i < features.length; i++) {
+            _projVec.set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+            _projVec.project(threeCamera);
+            // Skip points behind camera
+            if (_projVec.z > 1) continue;
+            const sx = (_projVec.x * hw) + hw;
+            const sy = (-_projVec.y * hh) + hh;
+            const d = Math.hypot(screenX - sx, screenY - sy);
+            if (d < bestDist && d < maxDist) {
+                bestIdx = i;
+                bestDist = d;
+            }
+        }
+        return bestIdx >= 0 ? bestIdx : null;
+    }
+
+    const domEl = threeRenderer.domElement;
+
+    // Click+drag to pointer lock for look-around, release to unlock
+    domEl.addEventListener("mousedown", (e) => {
+        if (e.button === 2 || e.button === 0) {
+            if (!document.pointerLockElement) {
+                domEl.requestPointerLock();
+            }
+            threeAutoRotate = false;
+        }
+    });
+
+    domEl.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    window.addEventListener("mouseup", (e) => {
+        if (document.pointerLockElement) {
+            document.exitPointerLock();
+        }
+    });
+
+    document.addEventListener("pointerlockchange", () => {
+        if (!document.pointerLockElement) {
+            domEl.style.cursor = "crosshair";
+        }
+    });
+
+    window.addEventListener("mousemove", (e) => {
+        if (document.pointerLockElement === domEl && viewMode === "3d") {
+            const dx = e.movementX;
+            const dy = e.movementY;
+
+            threeCamera.updateMatrixWorld();
+            const screenRight = new THREE.Vector3().setFromMatrixColumn(threeCamera.matrixWorld, 0).normalize();
+
+            // FPV mouse-look with pointer lock — no edge limits
+            const sens = 0.003;
+            const qYaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -dx * sens);
+            const qPitch = new THREE.Quaternion().setFromAxisAngle(screenRight, -dy * sens);
+            camQuat.premultiply(qYaw).premultiply(qPitch).normalize();
+        }
+    });
+
+    // WASD key handlers
+    window.addEventListener("keydown", (e) => {
+        if (viewMode !== "3d") return;
+        // Don't capture if typing in an input
+        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+        const k = e.key.toLowerCase();
+        if (["w","a","s","d","e","q"," ","shift","arrowup","arrowdown","arrowleft","arrowright"].includes(k)) {
+            keysDown.add(k);
+            threeAutoRotate = false;
+            e.preventDefault();
+        }
+    });
+    window.addEventListener("keyup", (e) => {
+        keysDown.delete(e.key.toLowerCase());
+    });
+
+    domEl.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        // Scroll adjusts WASD fly speed (like Minecraft spectator)
+        if (e.deltaY < 0) {
+            flySpeed = Math.min(flySpeed * 1.3, 2.0);
+        } else {
+            flySpeed = Math.max(flySpeed / 1.3, 0.001);
+        }
+    }, { passive: false });
+
+    // Hover detection — screen-space picking (disabled during pointer lock)
+    domEl.addEventListener("mousemove", (e) => {
+        if (document.pointerLockElement) return;
+        const rect = domEl.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        const idx = findClosest3D(mx, my, 10);
+
+        if (idx !== null) {
+            const f = features[idx];
+            domEl.style.cursor = "pointer";
+
+            tooltip.style.display = "block";
+            tooltip.style.left = (e.clientX + 14) + "px";
+            tooltip.style.top = (e.clientY + 14) + "px";
+            const label = featureLabels[f.i];
+            const interpText3d = label && label.interp ? label.interp : (label && label.autointerp && label.autointerp !== "dead" ? label.autointerp : "");
+            const isTentative3d = label && label.confidence === "tentative";
+            const interpStr = interpText3d ? `<div class="tt-interp" style="${isTentative3d ? 'color:#c9a227' : ''}">${isTentative3d ? '⚠ ' : ''}${escapeHtml(interpText3d)}</div>` : '';
+            tooltip.innerHTML = `<div class="tt-idx">Feature #${f.i}</div>` +
+                interpStr +
+                `<div class="tt-stats">density: ${(f.d * 100).toFixed(2)}% | max: ${f.mx.toFixed(3)}</div>`;
+
+            if (threeHoverIdx !== idx) {
+                threeHoverIdx = idx;
+                hoverHighlightSet = new Set([f.i]);
+                updateThreeColors();
+            }
+        } else {
+            tooltip.style.display = "none";
+            if (!document.pointerLockElement) domEl.style.cursor = "crosshair";
+            if (threeHoverIdx !== null) {
+                threeHoverIdx = null;
+                hoverHighlightSet = null;
+                updateThreeColors();
+            }
+        }
+    });
+
+    domEl.addEventListener("mouseleave", () => {
+        tooltip.style.display = "none";
+        if (threeHoverIdx !== null) {
+            threeHoverIdx = null;
+            hoverHighlightSet = null;
+            updateThreeColors();
+        }
+    });
+
+    // Click detection — screen-space picking
+    let threeClickStart = null;
+    domEl.addEventListener("mousedown", (e) => {
+        threeClickStart = { x: e.clientX, y: e.clientY, time: Date.now() };
+    });
+    domEl.addEventListener("mouseup", async (e) => {
+        if (!threeClickStart) return;
+        const dx = e.clientX - threeClickStart.x;
+        const dy = e.clientY - threeClickStart.y;
+        const dt = Date.now() - threeClickStart.time;
+        threeClickStart = null;
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5 || dt > 300) return;
+
+        const rect = domEl.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const idx = findClosest3D(mx, my, 10);
+
+        if (idx !== null) {
+            const f = features[idx];
+            selectedIdx = f.i;
+            updateThreeColors();
+            await showFeature(f.i);
+        } else {
+            selectedIdx = null;
+            neighborData = null;
+            highlightSet = null;
+            searchResults = null;
+            searchInput.value = "";
+            searchStatus.textContent = "";
+            updateThreeColors();
+        }
+    });
+
+    updateThreeColors();
+    threeRenderer.setAnimationLoop(threeAnimate);
+}
+
+function updateThreeColors() {
+    if (!threePoints || viewMode !== "3d") return;
+    const dark = isDarkMode();
+    const pos = threePoints.geometry.attributes.position.array;
+
+    const hoverSet = getEffectiveHoverHighlightSet();
+    const activeHighlight = (hoverSet && hoverSet.size > 0) ? hoverSet
+        : (inferHighlightSet && inferHighlightSet.size > 0) ? inferHighlightSet
+        : highlightSet;
+    const hasHighlight = activeHighlight && activeHighlight.size > 0;
+
+    const hasFocusHighlight = (inferHighlightSet && inferHighlightSet.size > 0)
+        || (highlightSet && highlightSet.size > 0);
+
+    for (let i = 0; i < features.length; i++) {
+        const f = features[i];
+
+        // Hide dead features: make invisible
+        if (hideDead && featureLabels[f.i] && featureLabels[f.i].confidence === "dead") {
+            pointColors[i * 3] = 0; pointColors[i * 3 + 1] = 0; pointColors[i * 3 + 2] = 0;
+            pointSizes[i] = 0;
+            pointOpacities[i] = 0;
+            pointGlows[i] = 0;
+            pointRings[i] = 0;
+            continue;
+        }
+
+        const isSelected = f.i === selectedIdx;
+        const isHoverHL = hoverSet && hoverSet.size > 0 && hoverSet.has(f.i);
+        const isInferHL = inferHighlightSet && inferHighlightSet.size > 0 && inferHighlightSet.has(f.i);
+        const isSearchHL = highlightSet && highlightSet.size > 0 && highlightSet.has(f.i);
+
+        // Always compute the rainbow color
+        let h, s, l;
+        if (colorMode === "position") {
+            const px = pos[i * 3], py = pos[i * 3 + 1], pz = pos[i * 3 + 2];
+            h = (Math.atan2(pz, px) + Math.PI) / (2 * Math.PI);
+            s = 0.5 + Math.max(0, Math.min(1, (py + 2) / 4)) * 0.3;
+            const logD = Math.log10(Math.max(f.d, 1e-6));
+            l = Math.max(0.3, Math.min(0.9, (logD + 5) / 4));
+        } else {
+            [h, s, l] = featureColorHSL(f);
+        }
+        let [r, g, b] = hslToRgb(h, s, l);
+        let size = 1.0;
+        let opacity = 1.0;
+        let glowAmt = 0.0;
+
+        const lb = featureLabels[f.i];
+        const hasLabel = lb && (lb.interp || lb.autointerp);
+        if (hasLabel) size = 1.8;
+
+        // Dead features: smaller + dimmer
+        if (lb && lb.confidence === "dead") {
+            size = 0.6;
+            opacity = 0.4;
+        }
+
+        if (isSelected) {
+            // White with subtle crosshair
+            r = 1.0; g = 1.0; b = 1.0;
+            size = 3.0;
+            glowAmt = 0.5;
+        } else if (isHoverHL) {
+            // Keep own color, thin crosshair
+            size = 2.5;
+            glowAmt = 0.4;
+        } else if (isInferHL || isSearchHL) {
+            // Keep own color, subtle glow
+            size = 2.0;
+            glowAmt = 0.3;
+        }
+
+        pointColors[i * 3] = r;
+        pointColors[i * 3 + 1] = g;
+        pointColors[i * 3 + 2] = b;
+        pointSizes[i] = size;
+        pointOpacities[i] = opacity;
+        pointGlows[i] = glowAmt;
+        pointRings[i] = getFeatureRingColor(f.i) ? 1.0 : 0.0;
+    }
+
+    threePoints.geometry.attributes.color.needsUpdate = true;
+    threePoints.geometry.attributes.size.needsUpdate = true;
+    threePoints.geometry.attributes.opacity.needsUpdate = true;
+    threePoints.geometry.attributes.glow.needsUpdate = true;
+    threePoints.geometry.attributes.ring.needsUpdate = true;
+}
+
+function threeAnimate(time, xrFrame) {
+    if (viewMode !== "3d") return;
+
+    const inVR = threeRenderer.xr.isPresenting;
+
+    try {
+        if (inVR) {
+            // === VR PATH ===
+
+            // === Controls: grip zoom, trigger grab-rotate, R-stick scroll ===
+            const session = threeRenderer.xr.getSession();
+            const selectorCtrl = vrSelectorHand === 'right' ? vrControllerR : vrControllerL;
+
+            // Get head quaternion (rig-local) for view-aligned input
+            let headQuat = threeCamera.quaternion;
+            try {
+                const xrCam = threeRenderer.xr.getCamera();
+                if (xrCam) headQuat = xrCam.quaternion;
+            } catch(e) {}
+            // Composite world camera quat = rig * head
+            const worldCamQuat = vrRig.quaternion.clone().multiply(headQuat);
+
+            if (session && session.inputSources) {
+                // Zoom: grip buttons. Direction = where you're actually looking (world space)
+                const headForward = new THREE.Vector3(0, 0, -1).applyQuaternion(worldCamQuat);
+                if (headForward.lengthSq() > 0.001) headForward.normalize();
+
+                for (const source of session.inputSources) {
+                    if (!source.gamepad) continue;
+                    const btns = source.gamepad.buttons;
+                    if (!btns || btns.length < 2) continue;
+                    const gripVal = btns[1].value || (btns[1].pressed ? 1 : 0);
+                    if (gripVal > 0.1) {
+                        const dir = source.handedness === 'right' ? 1 : -1;
+                        vrRig.position.addScaledVector(headForward, dir * gripVal * VR_ZOOM_SPEED);
+                    }
+                }
+            }
+
+            // Grab-ROTATE: view-aligned trackball rotation
+            // Project hand delta onto head's view axes, then rotate around screen axes.
+            // Exactly like desktop mouse-look: premultiply world-space rotations.
+            if (vrGrabbing && !vrPanelDragging && vrGrabPrevLocal && selectorCtrl) {
+                try {
+                    const currLocal = selectorCtrl.position.clone();
+                    const frameDelta = currLocal.sub(vrGrabPrevLocal);
+                    const totalMoved = selectorCtrl.position.clone()
+                        .sub(vrGrabStartLocal).length();
+
+                    if (totalMoved > VR_GRAB_THRESHOLD) {
+                        vrGrabMoved = true;
+
+                        // Project rig-local hand delta onto head's view axes
+                        // This makes "hand right" = "visual right" regardless of head turn
+                        const headRight = new THREE.Vector3(1, 0, 0).applyQuaternion(headQuat);
+                        const headUp = new THREE.Vector3(0, 1, 0).applyQuaternion(headQuat);
+                        const dx = frameDelta.dot(headRight); // visual-right component
+                        const dy = frameDelta.dot(headUp);    // visual-up component
+
+                        if (Math.abs(dx) > 0.0001 || Math.abs(dy) > 0.0001) {
+                            // World-space view axes for rotation
+                            const screenRight = new THREE.Vector3(1, 0, 0)
+                                .applyQuaternion(worldCamQuat).normalize();
+                            const screenUp = new THREE.Vector3(0, 1, 0)
+                                .applyQuaternion(worldCamQuat).normalize();
+
+                            // Trackball: rotate around view-up for horizontal, view-right for vertical
+                            // No world-Y lock = no polar lock. Starfield has no horizon.
+                            const qH = new THREE.Quaternion().setFromAxisAngle(
+                                screenUp, dx * VR_ROTATE_SENS
+                            );
+                            const qV = new THREE.Quaternion().setFromAxisAngle(
+                                screenRight, -dy * VR_ROTATE_SENS
+                            );
+                            vrRig.quaternion.premultiply(qH)
+                                .premultiply(qV).normalize();
+                        }
+                    }
+
+                    vrGrabPrevLocal = selectorCtrl.position.clone();
+                } catch(e) {}
+            }
+
+            // Panel drag: move panel in camera-local space along controller ray
+            // Panel is child of camera, so position is relative to your head
+            if (vrPanelDragging && selectorCtrl && vrPanelMesh) {
+                selectorCtrl.updateMatrixWorld(true);
+                const wp = new THREE.Vector3();
+                wp.setFromMatrixPosition(selectorCtrl.matrixWorld);
+                const wq = new THREE.Quaternion();
+                selectorCtrl.getWorldQuaternion(wq);
+                const wd = new THREE.Vector3(0, 0, -1).applyQuaternion(wq);
+                const worldTarget = wp.clone().addScaledVector(wd, vrPanelDragDist);
+                // Convert world target to camera-local space
+                threeCamera.updateMatrixWorld(true);
+                threeCamera.worldToLocal(worldTarget);
+                vrPanelMesh.position.copy(worldTarget);
+            }
+
+            // R-stick scroll for VR panel
+            if (session && session.inputSources) {
+                for (const source of session.inputSources) {
+                    if (source.handedness !== 'right' || !source.gamepad) continue;
+                    const axes = source.gamepad.axes;
+                    if (axes.length >= 4) {
+                        const stickY = axes[3];
+                        if (Math.abs(stickY) > 0.15) {
+                            vrPanelScroll = Math.max(0, Math.min(vrPanelScrollMax,
+                                vrPanelScroll + stickY * 8));
+                            if (vrPanelFeatureData) {
+                                renderVRPanel(vrPanelFeatureData, vrPanelTokenData);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Clamp position: leash to 2x the furthest point from center
+            const rigDist = vrRig.position.length();
+            if (rigDist > vrMaxRadius) {
+                vrRig.position.multiplyScalar(vrMaxRadius / rigDist);
+            }
+
+            // VR ray picking + ray shortening
+            vrRayHitDist = -1; // reset each frame
+            if (selectorCtrl && threePoints) {
+                try {
+                    const ctrlPos = new THREE.Vector3();
+                    const ctrlDir = new THREE.Vector3(0, 0, -1);
+                    selectorCtrl.updateMatrixWorld(true);
+                    ctrlPos.setFromMatrixPosition(selectorCtrl.matrixWorld);
+                    const ctrlQuat = new THREE.Quaternion();
+                    selectorCtrl.getWorldQuaternion(ctrlQuat);
+                    ctrlDir.applyQuaternion(ctrlQuat);
+
+                    // Check panel intersection first (for ray cutoff)
+                    if (vrPanelMesh && vrPanelMesh.visible) {
+                        const rc = new THREE.Raycaster(ctrlPos, ctrlDir, 0, 100);
+                        const panelHits = rc.intersectObject(vrPanelMesh);
+                        if (panelHits.length > 0) {
+                            vrRayHitDist = panelHits[0].distance;
+                        }
+                    }
+
+                    // Star picking
+                    const positions = threePoints.geometry.attributes.position.array;
+                    let bestIdx = -1, bestDist = Infinity;
+                    let bestT = Infinity;
+                    const threshold = 0.5;
+                    const tmpVec = new THREE.Vector3();
+                    const tmpProj = new THREE.Vector3();
+
+                    for (let i = 0; i < features.length; i++) {
+                        tmpVec.set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+                        tmpVec.sub(ctrlPos);
+                        const t = tmpVec.dot(ctrlDir);
+                        if (t < 0 || t > 50) continue;
+                        tmpProj.copy(ctrlDir).multiplyScalar(t);
+                        const dist = tmpVec.distanceTo(tmpProj);
+                        if (dist < threshold && dist < bestDist) {
+                            bestIdx = i;
+                            bestDist = dist;
+                            bestT = t;
+                        }
+                    }
+
+                    // Track nearest star for ray cutoff
+                    if (bestIdx >= 0) {
+                        if (vrRayHitDist < 0 || bestT < vrRayHitDist) {
+                            vrRayHitDist = bestT;
+                        }
+                    }
+
+                    if (bestIdx >= 0 && bestIdx !== threeHoverIdx) {
+                        threeHoverIdx = bestIdx;
+                        hoverHighlightSet = new Set([features[bestIdx].i]);
+                        updateThreeColors();
+                    } else if (bestIdx < 0 && threeHoverIdx !== null) {
+                        threeHoverIdx = null;
+                        hoverHighlightSet = null;
+                        updateThreeColors();
+                    }
+
+                    // Shorten ray to nearest hit (convert world dist → controller-local z)
+                    if (vrRayLine) {
+                        const rayPos = vrRayLine.geometry.attributes.position.array;
+                        if (vrRayHitDist > 0) {
+                            rayPos[5] = -(vrRayHitDist / VR_SCALE); // z of endpoint
+                        } else {
+                            rayPos[5] = -50; // full length
+                        }
+                        vrRayLine.geometry.attributes.position.needsUpdate = true;
+                    }
+                } catch(e) { /* controller not ready yet */ }
+            }
+
+        } else {
+            // === FLAT PATH (unchanged) ===
+
+            // Rig stays at identity in flat mode
+            vrRig.position.set(0, 0, 0);
+            vrRig.quaternion.identity();
+            vrRig.scale.set(1, 1, 1);
+
+            if (threeAutoRotate && !document.pointerLockElement) {
+                const angle = 0.001;
+                const cos = Math.cos(angle), sin = Math.sin(angle);
+                const x = camPos.x, z = camPos.z;
+                camPos.x = x * cos - z * sin;
+                camPos.z = x * sin + z * cos;
+                const autoRot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+                camQuat.premultiply(autoRot).normalize();
+            }
+
+            const moveSpeed = flySpeed;
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camQuat);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camQuat);
+            const up = new THREE.Vector3(0, 1, 0);
+            if (keysDown.has("w") || keysDown.has("arrowup")) camPos.addScaledVector(forward, moveSpeed);
+            if (keysDown.has("s") || keysDown.has("arrowdown")) camPos.addScaledVector(forward, -moveSpeed);
+            if (keysDown.has("a") || keysDown.has("arrowleft")) camPos.addScaledVector(right, -moveSpeed);
+            if (keysDown.has("d") || keysDown.has("arrowright")) camPos.addScaledVector(right, moveSpeed);
+            if (keysDown.has("e") || keysDown.has(" ")) camPos.addScaledVector(up, moveSpeed);
+            if (keysDown.has("q") || keysDown.has("shift")) camPos.addScaledVector(up, -moveSpeed);
+
+            threeCamera.position.copy(camPos);
+            threeCamera.quaternion.copy(camQuat);
+            threeCamera.updateMatrixWorld();
+
+            if (threePoints) {
+                threePoints.material.uniforms.fogNear.value = 2.0;
+                threePoints.material.uniforms.fogFar.value = 45.0;
+            }
+        }
+
+        // === SHARED PATH ===
+
+        // Scale label ring sprites to match star screen size
+        const ringGroup = threeScene.getObjectByName("labelRings");
+        if (ringGroup && threePoints) {
+            let effectiveCamPos = camPos;
+            if (inVR) {
+                try {
+                    effectiveCamPos = threeRenderer.xr.getCamera().getWorldPosition(new THREE.Vector3());
+                } catch(e) {
+                    effectiveCamPos = vrRig.position;
+                }
+            }
+            const pmVal = threePoints.material.uniforms.pointMultiplier.value;
+            for (const sprite of ringGroup.children) {
+                const dist = effectiveCamPos.distanceTo(sprite.position);
+                let starPx = 1.8 * pmVal / (Math.max(dist, 0.1) * Math.max(dist, 0.1));
+                if (starPx > 200) starPx = 200 + 40 * Math.log(starPx / 200);
+                const fov = threeCamera.fov * Math.PI / 180;
+                const focalPx = threeRenderer.domElement.height / (2 * Math.tan(fov / 2));
+                const ringWorldSize = starPx * 0.08 * dist / focalPx;
+                sprite.scale.set(ringWorldSize, ringWorldSize, 1);
+            }
+        }
+    } catch (e) {
+        // Log but don't kill the animation loop
+        if (!threeAnimate._errLogged) {
+            console.error("threeAnimate error:", e);
+            threeAnimate._errLogged = true;
+        }
+    }
+
+    // ALWAYS render — even if VR logic above threw. This is what the Quest
+    // needs to see frames and exit the "entering VR" loading screen.
+    threeScene.background = new THREE.Color(0x000000);
+    threeRenderer.render(threeScene, threeCamera);
+
+    if (!inVR) {
+        updateProximityLabels();
+    }
+}
+
+const _proxLabelsContainer = document.getElementById("proximity-labels");
+const _proxLinesCanvas = document.getElementById("proximity-lines");
+const _proxLinesCtx = _proxLinesCanvas.getContext("2d");
+const _proxLabelEls = {}; // feature_idx -> DOM element
+const _proxVec = new THREE.Vector3();
+const PROX_FADE_NEAR = 0.2;  // full opacity at this distance
+const PROX_FADE_FAR = 0.8;   // invisible beyond this
+const _proxLineData = []; // [{sx, sy, lx, ly, opacity}] for drawing lines
+
+function updateProximityLabels() {
+    if (!threePoints || viewMode !== "3d") return;
+    const positions = threePoints.geometry.attributes.position.array;
+    const rect = canvasContainer.getBoundingClientRect();
+    const hw = rect.width / 2, hh = rect.height / 2;
+
+    // Resize line canvas to match container
+    if (_proxLinesCanvas.width !== rect.width || _proxLinesCanvas.height !== rect.height) {
+        _proxLinesCanvas.width = rect.width;
+        _proxLinesCanvas.height = rect.height;
+    }
+    _proxLinesCtx.clearRect(0, 0, _proxLinesCanvas.width, _proxLinesCanvas.height);
+    _proxLineData.length = 0;
+
+    const active = new Set();
+
+    for (let i = 0; i < features.length; i++) {
+        const f = features[i];
+        const label = featureLabels[f.i];
+        if (!label || !(label.interp || label.autointerp)) continue;
+        if (hideDead && label.confidence === "dead") continue;
+
+        // Distance from camera
+        _proxVec.set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+        const dist = camPos.distanceTo(_proxVec);
+
+        if (dist > PROX_FADE_FAR) {
+            // Too far — remove if exists
+            if (_proxLabelEls[f.i]) {
+                _proxLabelEls[f.i].style.opacity = "0";
+            }
+            continue;
+        }
+
+        // Project to screen
+        _proxVec.project(threeCamera);
+        // Behind camera
+        if (_proxVec.z > 1) {
+            if (_proxLabelEls[f.i]) _proxLabelEls[f.i].style.opacity = "0";
+            continue;
+        }
+
+        const sx = (1 + _proxVec.x) * hw;
+        const sy = (1 - _proxVec.y) * hh;
+
+        // Off screen
+        if (sx < -100 || sx > rect.width + 100 || sy < -50 || sy > rect.height + 50) {
+            if (_proxLabelEls[f.i]) _proxLabelEls[f.i].style.opacity = "0";
+            continue;
+        }
+
+        // Opacity: 1.0 at PROX_FADE_NEAR, 0.0 at PROX_FADE_FAR
+        const opacity = 1.0 - Math.max(0, Math.min(1, (dist - PROX_FADE_NEAR) / (PROX_FADE_FAR - PROX_FADE_NEAR)));
+
+        active.add(f.i);
+
+        // Compute star screen size (matching shader soft ceiling)
+        const pointMult = threePoints.material.uniforms.pointMultiplier.value;
+        let starPx = pointMult / (Math.max(dist, 0.1) * Math.max(dist, 0.1));
+        if (starPx > 200) starPx = 200 + 40 * Math.log(starPx / 200);
+        const scale = Math.max(0.25, Math.min(0.8, starPx / 25));
+        // Offset: start at ring edge (matching ring sprite size)
+        const offset = starPx * 0.08 + 2;
+
+        let el = _proxLabelEls[f.i];
+        if (!el) {
+            el = document.createElement("div");
+            el.className = "proximity-label";
+            const plText = label.interp || label.autointerp || "";
+            const plTentative = !label.interp && label.confidence === "tentative";
+            el.innerHTML = `<div class="pl-idx">Feature #${f.i}</div>`
+                + `<div class="pl-interp" style="${plTentative ? 'color:#c9a227' : ''}">${plTentative ? '⚠ ' : ''}${escapeHtml(plText)}</div>`
+                + `<div class="pl-stats">density: ${(f.d * 100).toFixed(2)}% | max: ${f.mx.toFixed(3)}</div>`;
+            _proxLabelsContainer.appendChild(el);
+            _proxLabelEls[f.i] = el;
+        }
+        el.style.left = sx + "px";
+        el.style.top = sy + "px";
+        el.style.opacity = opacity.toFixed(2);
+        el.style.borderColor = `rgba(255,255,255,${(opacity * 0.4).toFixed(2)})`;
+        el.style.transform = `translate(${offset}px, -50%) scale(${scale.toFixed(2)})`;
+        el.style.fontSize = "9px";
+
+        // Draw line from star to label
+        _proxLineData.push({ sx, sy, lx: sx + offset * scale, ly: sy, opacity });
+    }
+
+    // Clean up labels for features no longer in range
+    for (const idx in _proxLabelEls) {
+        if (!active.has(Number(idx)) && _proxLabelEls[idx].style.opacity !== "0") {
+            _proxLabelEls[idx].style.opacity = "0";
+        }
+    }
+
+    // Draw connecting lines from stars to labels
+    for (const ld of _proxLineData) {
+        _proxLinesCtx.beginPath();
+        _proxLinesCtx.moveTo(ld.sx, ld.sy);
+        _proxLinesCtx.lineTo(ld.lx, ld.ly);
+        _proxLinesCtx.strokeStyle = `rgba(255, 255, 255, ${(ld.opacity * 0.3).toFixed(2)})`;
+        _proxLinesCtx.lineWidth = 1;
+        _proxLinesCtx.stroke();
+    }
+}
+
+// === Resize handler ===
+window.addEventListener("resize", () => {
+    resize();
+    if (viewMode === "2d") {
+        draw();
+    } else if (threeRenderer) {
+        const rect = canvasContainer.getBoundingClientRect();
+        threeCamera.aspect = rect.width / rect.height;
+        threeCamera.updateProjectionMatrix();
+        threeRenderer.setSize(rect.width, rect.height);
+        basePointMultiplier = Math.min(rect.width, rect.height) * 0.8;
+        if (!vrActive) {
+            threePoints.material.uniforms.pointMultiplier.value = basePointMultiplier;
+        }
+    }
+});
+
+// === Init ===
+init().catch(err => {
+    console.error("Init failed:", err);
+    toolbarStats.textContent = "LOAD FAILED: " + err.message;
+    toolbarStats.style.color = "#e44";
+});
+</script>
+</body>
+</html>
