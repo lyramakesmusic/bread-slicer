@@ -1,8 +1,8 @@
 # Baguettotron SAE Feature Explorer
 
-Interactive map of 4,608 sparse autoencoder features extracted from [PleIAs/Baguettotron](https://huggingface.co/PleIAs/Baguettotron), a 1.1B parameter language model trained on French and English text.
+Interactive map of 4,608 sparse autoencoder features extracted from [PleIAs/Baguettotron](https://huggingface.co/PleIAs/Baguettotron)
 
-The SAE was trained on residual stream activations at layer 48 (of 56) with a TopK architecture (expansion=8, k=32, d_in=576). Features are projected onto a 2D/3D UMAP and color-coded by activation statistics.
+The SAE was trained on residual stream activations at layer 48 (of 80) with a TopK architecture (expansion=8, k=32, d_in=576). Features are projected onto a 2D/3D UMAP and color-coded by activation statistics.
 
 **Live version:** [lyramakesmusic.github.io/bread-slicer](https://lyramakesmusic.github.io/bread-slicer)
 
@@ -47,5 +47,4 @@ features/
   0.json .. 4607.json   -- per-feature detail (examples with token-level activations)
 ```
 
-Total size is about 91MB uncompressed. GitHub Pages gzips everything, so actual transfer is closer to 15-20MB
 
