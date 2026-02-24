@@ -2105,7 +2105,7 @@ document.getElementById("hide-dead").addEventListener("change", (e) => {
 // === Theme toggle ===
 const themeToggle = document.getElementById("theme-toggle");
 const savedTheme = localStorage.getItem("sae-theme");
-if (savedTheme === "dark") {
+if (savedTheme === "light") {
     document.documentElement.setAttribute("data-theme", "dark");
     themeToggle.textContent = "Light";
     themeToggle.classList.add("active");
@@ -4147,5 +4147,6 @@ init().catch(err => {
 </script>
 </body>
 </html>
+
 
 
