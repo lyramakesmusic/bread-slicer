@@ -4,7 +4,7 @@ Interactive map of 4,608 sparse autoencoder features extracted from [PleIAs/Bagu
 
 The SAE was trained on residual stream activations at layer 48 (of 56) with a TopK architecture (expansion=8, k=32, d_in=576). Features are projected onto a 2D/3D UMAP and color-coded by activation statistics.
 
-**Live version:** [TODO: add GitHub Pages URL]
+**Live version:** [lyramakesmusic.github.io/bread-slicer](https://lyramakesmusic.github.io/bread-slicer)
 
 ## What's here
 
@@ -47,21 +47,5 @@ features/
   0.json .. 4607.json   -- per-feature detail (examples with token-level activations)
 ```
 
-Total size is about 91MB uncompressed. GitHub Pages gzips everything, so actual transfer is closer to 15-20MB.
+Total size is about 91MB uncompressed. GitHub Pages gzips everything, so actual transfer is closer to 15-20MB
 
-## The SAE
-
-Trained on ~1.6M tokens of model free-run completions (dot-prompt generations). 37,908 training steps. Checkpoint and training code are in the parent repo.
-
-Of the 4,608 features: ~4,100 have confident auto-labels, ~60 are tentative, ~250 are dead (never activated above threshold). Dead features are hidden by default in the UI.
-
-## Regenerating
-
-If you update labels or retrain the SAE:
-
-```
-cd baguettotron
-uv run precompute_static.py
-```
-
-Takes about 3 minutes on CPU. Reads from `explorer/static/` and writes everything here.
